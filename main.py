@@ -11,10 +11,18 @@ from model.model import Net
 from utils.util import ToTensor, Rescale
 from scipy.signal import istft, resample
 
-SIGNAL_DIR = 'Signal_waveforms'
+TRAIN_DIR = 'train'
+PRED_DIR = 'pred'
 NOISE_DIR = 'Noise_waveforms'
 path = r'/home/antonio/SeismicSignalDenoising/data'
 save_path = './denoising_net.pth'
+
+T = 30  # secunde
+Fs = 100  # frecventa esantionare
+Ts = 1 / Fs
+nt = int(T / Ts)  #
+nperseg = 30
+nfft = 60
 
 train_size = 0.8
 test_size = 0.2
@@ -31,32 +39,34 @@ transform = transforms.Compose([
 
 
 def main():
-    dataset = SeismicDatasetLoader(root_dir=path, signal_dir=SIGNAL_DIR, noise_dir=NOISE_DIR, transform=transform)
-    dataset_size = len(dataset)
+    train_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=TRAIN_DIR, noise_dir=NOISE_DIR, transform=transform)
+    test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR, transform=transform)
 
-    train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(round(train_size * dataset_size)),
-                                                                          int(round(test_size * dataset_size))])
+    #train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(round(train_size * dataset_size)),
+     #                                                                     int(round(test_size * dataset_size))])
 
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=2)
-    test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=2)
 
     cnt = 0
     amp = 2 * np.sqrt(2)
-    for i in range(len(dataset)):
-        if(i != 45):
-            sample, _, _, _ = dataset[i]
-        #print('Sample', i, ':')
-        if len(sample['signal']) == 15000:
-            cnt += 1
-            #plt.plot(sample['signal'])
-            #plt.show()
-    #print(cnt)
-    sample, stft_dict_tmp, _, _ = dataset[8]
-    plt.hist(np.array(stft_dict_tmp['Zxx_processed']).ravel(), bins=50, density=True);
-    plt.xlabel("pixel values")
-    plt.ylabel("relative frequency")
-    plt.title("distribution of pixels");
-    #plt.show()
+    #for i in range(len(dataset)):
+     #   if (i != 45):
+      #      sample, _, _, _ = dataset[i]
+        # print('Sample', i, ':')
+       # if len(sample['signal']) == 15000:
+        #    cnt += 1
+            # plt.plot(sample['signal'])
+            # plt.show()
+    # print(cnt)
+    sample, stft_dict_tmp, mask, _, _ = train_dataset[8]
+    #plt.hist(np.array(stft_dict_tmp['Zxx_processed']).ravel(), bins=50, density=True);
+    #plt.xlabel("pixel values")
+    #plt.ylabel("relative frequency")
+    #plt.title("distribution of pixels");
+    # print(stft_dict_tmp['Zxx_processed'].shape)
+    # print(mask.shape)
+    # plt.show()
     # plt.figure()
     # plt.plot(sample['signal'], 'r')
     # plt.figure()
@@ -108,25 +118,39 @@ def main():
     RMS_noise = 0
     SNR_orig = []
     SNR = []
-    for epoch in range(50):
+
+    for epoch in range(30):
         error_list = []
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             with torch.enable_grad():
 
-                sample, stft_dict, noise_mask, signal_mask = data
+                sample, stft_dict, signal_mask, noise_mask, _ = data
+
                 signal_mask = signal_mask.to(device)
                 noise_mask = noise_mask.to(device)
                 sample = sample['signal'].to(device)
                 inputs = stft_dict['Zxx_processed'].to(device)
 
-                signal_approx = signal_mask * inputs[:, 0, :, :]
+                real_inputs = inputs.real
+                imag_inputs = inputs.imag
+                composed_inputs = torch.stack((real_inputs, imag_inputs), 1)
+                composed_inputs = composed_inputs.to(device)
+
+                # print(signal_mask.shape)
+                # print(inputs.shape)
+
+                signal_approx = signal_mask * real_inputs
                 signal_approx = signal_approx.squeeze(0)
                 sample = sample.squeeze(0)
 
-                _, signal_approx = istft(signal_approx.cpu())
+                # print(signal_approx.shape)
 
-                signal_approx = resample(signal_approx, 15000)
+                sample = sample[nt:2 * nt]
+
+                _, signal_approx = istft(signal_approx.cpu(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
+
+                # print(signal_approx.shape)
 
                 sample = sample.cpu().detach().numpy()
 
@@ -134,21 +158,21 @@ def main():
                 error = error.sum() / len(error)
                 error_list.append(error)
 
-                signal_rms_list = np.array([i for i, j in zip(signal_approx, sample) if i == j])
-                if len(signal_rms_list) == 0:
-                    RMS_sig = 0
-                else:
-                    RMS_sig = np.sqrt(np.mean(signal_rms_list**2))
+                # signal_rms_list = np.array([i for i, j in zip(signal_approx, sample) if i == j])
+                # if len(signal_rms_list) == 0:
+                #    RMS_sig = 0
+                # else:
+                #   RMS_sig = np.sqrt(np.mean(signal_rms_list**2))
 
-                #print(sum(sample - signal_approx == 0))
+                # print(sum(sample - signal_approx == 0))
 
-                noise_rms_list = np.array([i for i, j in zip(signal_approx, sample) if i != j])
-                RMS_noise = np.sqrt(np.mean(noise_rms_list ** 2))
+                # noise_rms_list = np.array([i for i, j in zip(signal_approx, sample) if i != j])
+                # RMS_noise = np.sqrt(np.mean(noise_rms_list ** 2))
 
-                SNR.append(10 * np.log10(RMS_sig ** 2 / RMS_noise ** 2))
-                SNR_orig.append(20)
-                #print(SNR)
-                #print(SNR_orig)
+                # SNR.append(10 * np.log10(RMS_sig ** 2 / RMS_noise ** 2))
+                # SNR_orig.append(20)
+                # print(SNR)
+                # print(SNR_orig)
 
                 labels = torch.stack([signal_mask, noise_mask])
                 labels = signal_mask.view(signal_mask.size(0), -1)
@@ -157,9 +181,9 @@ def main():
 
                 optimizer.zero_grad()
 
-                outputs = net(inputs)
+                outputs = net(composed_inputs)
                 output_plots = outputs[:, 0].cpu().detach().numpy()
-                output_plots = output_plots.reshape(31, 201)
+                # output_plots = output_plots.reshape(31, 201)
 
                 loss = criterion(outputs, labels)
                 loss.backward()
@@ -169,14 +193,14 @@ def main():
                 if i % 20 == 19:
                     print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 20))
                     running_loss = 0.0
-        MSE.append(sum(error_list) / len(error_list))
+        #MSE.append(sum(error_list) / len(error_list))
     print('Finished Training')
 
-    plt.figure()
-    plt.plot(MSE, 'x')
-    plt.figure()
-    plt.plot(SNR_orig, SNR, 'x')
-    plt.show()
+    #plt.figure()
+    #plt.plot(MSE, 'x')
+    #plt.figure()
+    #plt.plot(SNR_orig, SNR, 'x')
+    #plt.show()
 
     torch.save(net.state_dict(), save_path)
 
@@ -185,26 +209,31 @@ def main():
     MSE = []
     with torch.no_grad():
         for data in test_loader:
-            sample, images, noise_labels, signal_labels = data
+            sample, images, signal_labels, noise_labels, noise = data
             noise_labels = noise_labels.to(device)
             signal_labels = signal_labels.to(device)
             sample = sample['signal'].to(device)
             images = images['Zxx_processed'].to(device)
 
-            signal_approx = signal_labels * images[:, 0, :, :]
+            composed_images = torch.stack((images.real, images.imag), 1)
+            composed_images = composed_images.to(device)
+
+            signal_approx = signal_labels * images.real
             signal_approx = signal_approx.squeeze(0)
             sample = sample.squeeze(0)
 
-            _, signal_approx = istft(signal_approx.cpu())
-
-            signal_approx = resample(signal_approx, 15000)
+            _, signal_approx = istft(signal_approx.cpu(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
 
             sample = sample.cpu().detach().numpy()
-            plt.figure()
-            plt.plot(signal_approx)
-            plt.figure()
-            plt.plot(sample)
-            plt.show()
+            #plt.figure()
+            #plt.plot(signal_approx)
+            #plt.figure()
+            #plt.plot(sample)
+            #plt.show()
+            if len(sample) == 3000:
+                sample = sample
+            else:
+                sample = sample[nt:2 * nt]
             error = np.abs(signal_approx - sample) ** 2
             MSE.append(error.sum() / len(error))
             # print("MSE for current test image is:", MSE)
@@ -213,21 +242,23 @@ def main():
             signal_labels = signal_labels.view(signal_labels.size(0), -1)
             signal_labels = signal_labels.squeeze(0)
 
-            outputs = net(images)
+            outputs = net(composed_images)
 
             plot_outputs = outputs[:, 0].cpu().detach().numpy()
-            plot_outputs = plot_outputs.reshape(31, 201)
 
             plot_signal_labels = signal_labels.cpu().detach().numpy()
-            plot_signal_labels = plot_signal_labels.reshape(31, 201)
 
-            # plt.figure()
-            # plt.imshow(plot_outputs)
-            # plt.title('Network output')
-            # plt.figure()
-            # plt.imshow(plot_signal_labels)
-            # plt.title('Signal_labels')
-            # plt.show()
+            #plt.figure()
+            #plt.imshow(plot_outputs)
+            #plt.title('Network output')
+            #plt.figure()
+            #plt.imshow(plot_signal_labels)
+            #plt.title('Signal_labels')
+            #plt.show()
+
+            snr_calculat = 20 * np.log10(np.std(signal_approx) / np.std(noise.detach().numpy()))
+            SNR.append(snr_calculat)
+            SNR_orig.append(10)
 
             # _, predicted = torch.max(outputs.data, 1)
             predicted = outputs[:, 0]
@@ -238,7 +269,11 @@ def main():
     # print('Accuracy of the network on the test images: %d %%' % (
     #       100 * correct / total))
     plt.figure()
-    plt.plot(MSE, 'x')
+    #plt.plot(MSE, 'x')
+    print(len(SNR))
+    print(len(SNR_orig))
+    plt.plot(SNR, '*')
+    plt.plot(SNR_orig, '*')
     plt.show()
 
 

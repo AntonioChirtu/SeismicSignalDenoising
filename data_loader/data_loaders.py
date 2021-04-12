@@ -21,10 +21,9 @@ class SeismicDatasetLoader(BaseDataLoader):
         assert os.path.exists(os.path.join(self.root_dir, self.signal_dir)), 'Path to signal images cannot be found'
         assert os.path.exists(os.path.join(self.root_dir, self.noise_dir)), 'Path to noise images cannot be found'
 
-        #data = [np.load(f, mmap_mode='r')) for f in os.listdir(signal_dir)]
+        # data = [np.load(f, mmap_mode='r')) for f in os.listdir(signal_dir)]
 
-
-        #lengths =[d.shape[0] for d in data]
+        # lengths =[d.shape[0] for d in data]
         self.signal = sorted([os.path.join(self.root_dir, signal_dir, file) for file in
                               os.listdir(os.path.join(self.root_dir, self.signal_dir))
                               if file.endswith('.npz')])  # and np.isin(int(file[0:4]), self.idx_list)])
@@ -33,56 +32,42 @@ class SeismicDatasetLoader(BaseDataLoader):
                              if file.endswith('.npz')])  # and np.isin(int(file[0:4]), self.idx_list)])
 
     def __len__(self):
-        #return len(self.signal)
-        return 1000
+        return len(self.signal)
+        # return 1000
 
     def __getitem__(self, item):
         if torch.is_tensor(item):
             item = item.tolist()
 
+        # np_Array = np.load(self.signal[item])
+        # print(np_Array['data'])
+
         noise = np.load(self.noise[randint(0, len(self.signal))], allow_pickle=True)['arr_0']
-        signal = np.load(self.signal[item], allow_pickle=True)['arr_0']
+        signal_dict = np.load(self.signal[item], allow_pickle=True)['data']
+        # print(signal_dict.shape)
+        if len(signal_dict.shape) > 1:
+            signal = signal_dict[:, 0]
+        else:
+            signal = signal_dict
 
-        #signal = resample(signal, 25500)
-
-        processed = prepare_dataset(noise, signal)
-        #processed = resample(processed, len(signal))
-        #noise = resample(noise, len(signal))
-
+        stft_dict, processed, noise = prepare_dataset(noise, signal)
+        # print(stft_dict['Zxx_processed'].shape)
         sample = {'signal': signal, 'noise': noise, 'processed': processed}
 
-        f, t, Zxx_processed = stft(processed)
-        _, _, Zxx_signal = stft(signal)
-        _, _, Zxx_noise = stft(noise)
-
-        Zxx_processed = pol2cart(np.abs(Zxx_processed), np.angle(Zxx_processed))
-        Zxx_signal = pol2cart(np.abs(Zxx_signal), np.angle(Zxx_signal))
-        Zxx_noise = pol2cart(np.abs(Zxx_noise), np.angle(Zxx_noise))
-
-        Zxx_processed = resample(Zxx_processed, 31, axis=1)
-        Zxx_signal = resample(Zxx_signal, 31, axis=1)
-        Zxx_noise = resample(Zxx_noise, 31, axis=1)
-
-        Zxx_processed = resample(Zxx_processed, 201, axis=2)
-        Zxx_signal = resample(Zxx_signal, 201, axis=2)
-        Zxx_noise = resample(Zxx_noise, 201, axis=2)
-
-        f = resample(f, 31)
-
         # Ms
-        signal_mask = 1 / (1 + np.abs(np.sqrt(Zxx_noise[0] ** 2 + Zxx_noise[1] ** 2)) / np.abs(
-            np.sqrt(Zxx_signal[0] ** 2 + Zxx_signal[1] ** 2)))
+        signal_mask = 1 / (
+                1 + np.abs(np.sqrt(stft_dict['Zxx_noise'].real ** 2 + stft_dict['Zxx_noise'].imag ** 2)) / np.abs(
+            np.sqrt(stft_dict['Zxx_signal'].real ** 2 + stft_dict['Zxx_signal'].imag ** 2)))
 
         # Mn
-        noise_mask = (np.abs(np.sqrt(Zxx_noise[0] ** 2 + Zxx_noise[1] ** 2)) / np.abs(
-            np.sqrt(Zxx_signal[0] ** 2 + Zxx_signal[1] ** 2))) / (
-                                 1 + np.abs(np.sqrt(Zxx_noise[0] ** 2 + Zxx_noise[1] ** 2)) / np.abs(
-                             np.sqrt(Zxx_signal[0] ** 2 + Zxx_signal[1] ** 2)))
-
-        stft_dict = {'f': f, 't': t, 'Zxx_signal': Zxx_signal, 'Zxx_processed': Zxx_processed}
+        noise_mask = (np.abs(np.sqrt(stft_dict['Zxx_noise'].real ** 2 + stft_dict['Zxx_noise'].imag ** 2)) / np.abs(
+            np.sqrt(stft_dict['Zxx_signal'].real ** 2 + stft_dict['Zxx_signal'].imag ** 2))) / (
+                             1 + np.abs(
+                         np.sqrt(stft_dict['Zxx_noise'].real ** 2 + stft_dict['Zxx_noise'].imag ** 2)) / np.abs(
+                         np.sqrt(stft_dict['Zxx_signal'].real ** 2 + stft_dict['Zxx_signal'].imag ** 2)))
 
         if self.transform:
             sample = self.transform(sample)
             stft_dict = self.transform(stft_dict)
 
-        return sample, stft_dict, signal_mask, noise_mask #{'sample': sample, 'stft_dict': stft_dict, 'signal_mask': signal_mask,'noise_mask': noise_mask}
+        return sample, stft_dict, signal_mask, noise_mask, noise

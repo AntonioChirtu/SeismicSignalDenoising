@@ -1,2 +1,4 @@
 /venv/
 /.idea/
+/data_loader/GDrive_update.py
+/data_loader/AZ_PFO_2012083108441344.npz

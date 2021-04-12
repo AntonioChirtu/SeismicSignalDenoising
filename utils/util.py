@@ -7,6 +7,7 @@ from collections import OrderedDict
 from matplotlib import pyplot as plt
 from torchvision import transforms
 import numpy as np
+from scipy import signal
 import math
 
 
@@ -83,80 +84,66 @@ def pol2cart(rho, phi):
 
 
 # CHANGE DIMMENSIONS TO 31X201 (31 FREQUENCY, 201 TIME SAMPLES)
-def prepare_dataset(noise, signal):
+def prepare_dataset(noise, data):
     """ Function for adding noise over signal to provide data for training """
 
-    signal_cp = np.zeros(len(signal))
+    semnal_e = data
 
-    if len(signal) * 0.2 <= len(noise):
-        noise_cp = noise[:int(0.2 * len(signal))]
+    T = 30  # secunde
+    Fs = 100  # frecventa esantionare
+    Ts = 1 / Fs
+    freqs = [0, Fs / 2]  # Hz
+    times = [0, T]  # secunde
+    nperseg = 30
+    nfft = 60
+    nt = int(T / Ts)  # numar esantioane = 30 / (1/100) = 3000 esantioane
+    if len(semnal_e) == 3000:
+        x = semnal_e
     else:
-        noise_cp = noise
+        x = semnal_e[
+            nt:2 * nt]  # selectam 3000 esantioane pentru a avea 201 ferestre temporale suprapuse in care se calculeaza STFT
+    # numar_ferestre_temporale ~ (size_x - nperseg)/(nperseg-overlap), overlap = nperseg // 2
 
-    # calculate constant for required RMS
-    signal_RMS = math.sqrt(np.mean(signal ** 2))
-    required_RMS = math.sqrt(signal_RMS ** 2 / 10 ** 2)
-    noise_RMS = math.sqrt(max(np.mean(noise_cp ** 2), 0))
-    if noise_RMS != 0:
-        constant = required_RMS / noise_RMS
+    # SNR[dB] = 10 * log_10 (P_signal / P_noise) = 10 * log_10 (P_signal / P_noise), std_noise = sqrt(P_noise)
+    # SNR[dB] = 20 * log_10 (std_signal / std_noise) --> e gresita formula (5) din articol
+    snr = 10
+    std_signal = np.std(x)
+    std_noise = std_signal / (10 ** (snr / 20))
+
+    # daca noise are aceeasi lungime
+    if len(noise) == len(data):
+        noise = std_noise * np.random.randn(x.shape[0])  # noise ~ N(medie = 0, dispersie = sigma_noise)
+
+    # daca noise are lungime mai mica, se insereaza zgomotul la o pozitie aleatoare din semnal
     else:
-        constant = 1
+        noise_length = len(noise)
+        position = np.random.randint(0, x.shape[0] - noise_length)
+        noise = np.zeros(x.shape[0])
+        noise[position:position + noise_length] = np.random.randn(noise_length)
+        noise = noise / np.std(noise)
+        noise = std_noise * noise
 
-    for idx in range(len(noise_cp)):
-        noise_cp[idx] = noise_cp[idx] * constant
+    # Adaugare zgomot
+    noisy_x = x + noise
+    snr_calculat = 20 * np.log10(np.std(x) / np.std(noise))
 
-    if len(signal_cp) * 0.2 <= len(noise_cp):
-        signal_cp[int(0.2 * len(signal_cp)):int(0.4 * len(signal_cp))] += noise_cp
-        signal_cp[int(0.2 * len(signal_cp)):int(0.4 * len(signal_cp))] += signal[
-                                                                          int(0.2 * len(signal)):int(0.4 * len(signal))]
-        signal_cp[:int(0.2 * len(signal_cp))] = signal[:int(0.2 * len(signal))]
-        signal_cp[int(0.4 * len(signal_cp)) + 1:] = signal[int(0.4 * len(signal)) + 1:]
-    else:
-        signal_cp[int(0.2 * len(signal_cp)):int(0.2 * len(signal_cp)) + len(noise_cp)] += noise_cp
-        signal_cp[int(0.2 * len(signal_cp)):int(0.2 * len(signal_cp)) + len(noise_cp)] += signal[
-                                                                                          int(0.2 * len(signal)):int(
-                                                                                              0.2 * len(signal)) + len(
-                                                                                              noise_cp)]
-        signal_cp[:int(0.2 * len(signal_cp))] = signal[:int(0.2 * len(signal))]
-        signal_cp[int(0.2 * len(signal_cp)) + len(noise_cp) + 1:] = signal[int(0.2 * len(signal)) + len(noise_cp) + 1:]
+    # STFT -- partea reala; partea imaginara
+    f, t, x_fft = signal.stft(x, fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')  # signal_shape = [31, 201]
+    f, t, noise_fft = signal.stft(noise, fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
+    f, t, noisy_fft = signal.stft(noisy_x, fs=Fs, nperseg=nperseg, nfft=nfft,
+                                  boundary='zeros')  # noise_shape = signal_shape
 
-    return signal_cp
+    x_fft = x_fft / np.std(x_fft)
+    noisy_fft = noisy_fft / np.std(noisy_fft)
 
-
-'''
-class ToTensor(object):
-    """Converts ndarrays in sample to Tensors"""
-
-    def __call__(self, sample):
-        signal, noise, processed = sample['signal'], sample['noise'], sample['processed']
-
-        return {'signal': torch.from_numpy(signal),
-                'noise': torch.from_numpy(noise),
-                'processed': torch.from_numpy(processed)}
-
-
-class Normalize(object):
-    """Normalizes Tensor values to given mean and standard deviation"""
-
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def __call__(self, sample):
-        signal, noise, processed = sample['signal'], sample['noise'], sample['processed']
-
-        transform = transforms.Normalize(self.mean, self.std)
-        return {'signal': transform(signal),
-                'noise': transform(noise),
-                'processed': transform(processed)}
-'''
+    return {'f': f, 't': t, 'Zxx_processed': noisy_fft, 'Zxx_signal': x_fft, 'Zxx_noise': noise_fft}, noisy_x, noise
 
 
 class ToTensor(object):
     """Converts ndarrays in sample to Tensors"""
 
     def __call__(self, sample):
-        if len(sample) == 4:
+        if len(sample) == 5:
             stft_dict = sample
 
             stft_dict['Zxx_signal'] = torch.from_numpy(stft_dict['Zxx_signal'])
