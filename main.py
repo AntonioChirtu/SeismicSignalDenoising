@@ -69,10 +69,11 @@ def main():
     # print(stft_dict_tmp['Zxx_processed'].shape)
     # print(mask.shape)
     # plt.show()
-    # plt.figure()
-    # plt.plot(sample['signal'], 'r')
-    # plt.figure()
-    # plt.plot(sample['noise'], 'b')
+    #plt.figure()
+    #plt.plot(sample['signal'], 'r')
+    #plt.figure()
+    #plt.plot(sample['noise'], 'b')
+    #plt.show()
     # plt.figure()
     # plt.plot(sample['processed'], 'm', sample['noise'], 'b')
     # plt.figure()
@@ -121,7 +122,7 @@ def main():
     SNR_orig = []
     SNR = []
 
-    for epoch in range(25):
+    for epoch in range(2):
         error_list = []
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
@@ -152,7 +153,7 @@ def main():
 
                 _, signal_approx = istft(signal_approx.cpu(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
 
-                rescaled_signal = signal_approx - np.min(signal_approx) / (signal_approx - np.max(signal_approx))
+                #rescaled_signal = signal_approx - np.min(signal_approx) / (signal_approx - np.max(signal_approx))
                 # print(signal_approx.shape)
 
                 sample = sample.cpu().detach().numpy()
@@ -207,6 +208,7 @@ def main():
             _, signal_approx = istft(signal_approx.cpu().detach().numpy(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
 
             #rescaled_signal = (signal_approx - np.min(signal_approx)) / (np.max(signal_approx) - np.min(signal_approx))
+            rescaled_signal = 0.5 + (signal_approx - signal_approx.mean()) * (0.5 / signal_approx.std())
             sample = sample.cpu().detach().numpy()
             #plt.figure()
             #plt.plot(rescaled_signal)
@@ -217,10 +219,6 @@ def main():
                 sample = sample
             else:
                 sample = sample[nt:2 * nt]
-            error = np.abs(rescaled_signal - sample) ** 2
-            MSE.append(error.sum() / len(error))
-            # print("MSE for current test image is:", MSE)
-            # print(signal_approx[:, 0, 0])
 
             signal_labels = signal_labels.view(signal_labels.size(0), -1)
             signal_labels = signal_labels.squeeze(0)

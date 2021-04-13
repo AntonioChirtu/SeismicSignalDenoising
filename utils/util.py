@@ -202,16 +202,23 @@ class Normalize(object):
         if len(sample) == 4:
             stft_dict = sample
 
-            transform = transforms.Normalize(self.mean, self.std)
+            signal_real_mean = stft_dict['Zxx_signal'].real.mean()
+            signal_real_std = stft_dict['Zxx_signal'].real.std()
+            signal_imag_mean = stft_dict['Zxx_signal'].imag.mean()
+            signal_imag_std = stft_dict['Zxx_signal'].imag.std()
+            processed_real_mean = stft_dict['Zxx_processed'].real.mean()
+            processed_real_std = stft_dict['Zxx_processed'].real.std()
+            processed_imag_mean = stft_dict['Zxx_processed'].imag.mean()
+            processed_imag_std = stft_dict['Zxx_processed'].imag.std()
 
-            stft_dict['Zxx_signal'] = stft_dict['Zxx_signal'].unsqueeze(0)
-            stft_dict['Zxx_processed'] = stft_dict['Zxx_processed'].unsqueeze(0)
-
-            stft_dict['Zxx_signal'] = transform(stft_dict['Zxx_signal'])
-            stft_dict['Zxx_processed'] = transform(stft_dict['Zxx_processed'])
-
-            stft_dict['Zxx_signal'] = stft_dict['Zxx_signal'].squeeze(0)
-            stft_dict['Zxx_processed'] = stft_dict['Zxx_processed'].squeeze(0)
+            stft_dict['Zxx_signal'].real = self.mean + (stft_dict['Zxx_signal'].real - signal_real_mean) * (
+                        self.std / signal_real_std)
+            stft_dict['Zxx_signal'].imag = self.mean + (stft_dict['Zxx_signal'].imag - signal_imag_mean) * (
+                    self.std / signal_imag_std)
+            stft_dict['Zxx_processed'].real = self.mean + (stft_dict['Zxx_processed'].real - processed_real_mean) * (
+                    self.std / processed_real_std)
+            stft_dict['Zxx_processed'].imag = self.mean + (stft_dict['Zxx_processed'].imag - processed_imag_mean) * (
+                    self.std / processed_imag_std)
 
             return {'f': sample['f'], 't': sample['t'], 'Zxx_signal': stft_dict['Zxx_signal'],
                     'Zxx_processed': stft_dict['Zxx_processed']}
@@ -219,25 +226,9 @@ class Normalize(object):
 
             signal, noise, processed = sample['signal'], sample['noise'], sample['processed']
 
-            transform = transforms.Normalize(self.mean, self.std)
-
-            signal = signal.unsqueeze(0)
-            signal = signal.unsqueeze(0)
-            signal = transform(signal)
-            signal = signal.squeeze(0)
-            signal = signal.squeeze(0)
-
-            noise = noise.unsqueeze(0)
-            noise = noise.unsqueeze(0)
-            noise = transform(noise)
-            noise = noise.squeeze(0)
-            noise = noise.squeeze(0)
-
-            processed = processed.unsqueeze(0)
-            processed = processed.unsqueeze(0)
-            processed = transform(processed)
-            processed = processed.squeeze(0)
-            processed = processed.squeeze(0)
+            signal = self.mean + (signal - signal.mean()) * (self.std / signal.std())
+            noise = self.mean + (noise - noise.mean()) * (self.std / noise.std())
+            processed = self.mean + (processed - processed.mean()) * (self.std / processed.std())
 
             return {'signal': signal,
                     'noise': noise,

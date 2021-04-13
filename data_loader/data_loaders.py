@@ -67,8 +67,11 @@ class SeismicDatasetLoader(BaseDataLoader):
                          np.sqrt(stft_dict['Zxx_noise'].real ** 2 + stft_dict['Zxx_noise'].imag ** 2)) / np.abs(
                          np.sqrt(stft_dict['Zxx_signal'].real ** 2 + stft_dict['Zxx_signal'].imag ** 2)))
 
+
         if self.transform:
             sample = self.transform(sample)
             stft_dict = self.transform(stft_dict)
+
+
 
         return sample, stft_dict, signal_mask, noise_mask, noise
