@@ -8,7 +8,7 @@ from torchvision import transforms
 
 from data_loader.data_loaders import SeismicDatasetLoader
 from model.model import Net
-from utils.util import ToTensor, Rescale
+from utils.util import ToTensor, Rescale, Normalize
 from scipy.signal import istft, resample
 
 TRAIN_DIR = 'train'
@@ -29,10 +29,12 @@ test_size = 0.2
 
 tensor = ToTensor()
 rescale = Rescale()
+normalize = Normalize(0.5, 0.5)
 
 transform = transforms.Compose([
     tensor,
-    rescale
+    normalize
+    #rescale
     # transforms.ToTensor(),
     # transforms.Normalize([0.5], [0.5])
 ])
@@ -45,7 +47,7 @@ def main():
     #train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(round(train_size * dataset_size)),
      #                                                                     int(round(test_size * dataset_size))])
 
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=2)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=2)
 
     cnt = 0
@@ -119,7 +121,7 @@ def main():
     SNR_orig = []
     SNR = []
 
-    for epoch in range(30):
+    for epoch in range(25):
         error_list = []
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
@@ -150,29 +152,10 @@ def main():
 
                 _, signal_approx = istft(signal_approx.cpu(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
 
+                rescaled_signal = signal_approx - np.min(signal_approx) / (signal_approx - np.max(signal_approx))
                 # print(signal_approx.shape)
 
                 sample = sample.cpu().detach().numpy()
-
-                error = np.abs(signal_approx - sample) ** 2
-                error = error.sum() / len(error)
-                error_list.append(error)
-
-                # signal_rms_list = np.array([i for i, j in zip(signal_approx, sample) if i == j])
-                # if len(signal_rms_list) == 0:
-                #    RMS_sig = 0
-                # else:
-                #   RMS_sig = np.sqrt(np.mean(signal_rms_list**2))
-
-                # print(sum(sample - signal_approx == 0))
-
-                # noise_rms_list = np.array([i for i, j in zip(signal_approx, sample) if i != j])
-                # RMS_noise = np.sqrt(np.mean(noise_rms_list ** 2))
-
-                # SNR.append(10 * np.log10(RMS_sig ** 2 / RMS_noise ** 2))
-                # SNR_orig.append(20)
-                # print(SNR)
-                # print(SNR_orig)
 
                 labels = torch.stack([signal_mask, noise_mask])
                 labels = signal_mask.view(signal_mask.size(0), -1)
@@ -183,7 +166,6 @@ def main():
 
                 outputs = net(composed_inputs)
                 output_plots = outputs[:, 0].cpu().detach().numpy()
-                # output_plots = output_plots.reshape(31, 201)
 
                 loss = criterion(outputs, labels)
                 loss.backward()
@@ -222,11 +204,12 @@ def main():
             signal_approx = signal_approx.squeeze(0)
             sample = sample.squeeze(0)
 
-            _, signal_approx = istft(signal_approx.cpu(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
+            _, signal_approx = istft(signal_approx.cpu().detach().numpy(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
 
+            #rescaled_signal = (signal_approx - np.min(signal_approx)) / (np.max(signal_approx) - np.min(signal_approx))
             sample = sample.cpu().detach().numpy()
             #plt.figure()
-            #plt.plot(signal_approx)
+            #plt.plot(rescaled_signal)
             #plt.figure()
             #plt.plot(sample)
             #plt.show()
@@ -234,7 +217,7 @@ def main():
                 sample = sample
             else:
                 sample = sample[nt:2 * nt]
-            error = np.abs(signal_approx - sample) ** 2
+            error = np.abs(rescaled_signal - sample) ** 2
             MSE.append(error.sum() / len(error))
             # print("MSE for current test image is:", MSE)
             # print(signal_approx[:, 0, 0])
@@ -256,7 +239,7 @@ def main():
             #plt.title('Signal_labels')
             #plt.show()
 
-            snr_calculat = 20 * np.log10(np.std(signal_approx) / np.std(noise.detach().numpy()))
+            snr_calculat = 20 * np.log10(np.std(rescaled_signal) / np.std(sample - rescaled_signal))
             SNR.append(snr_calculat)
             SNR_orig.append(10)
 
@@ -270,8 +253,6 @@ def main():
     #       100 * correct / total))
     plt.figure()
     #plt.plot(MSE, 'x')
-    print(len(SNR))
-    print(len(SNR_orig))
     plt.plot(SNR, '*')
     plt.plot(SNR_orig, '*')
     plt.show()

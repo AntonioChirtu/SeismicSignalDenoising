@@ -77,12 +77,6 @@ class MetricTracker:
         return dict(self._data.average)
 
 
-def pol2cart(rho, phi):
-    x = rho * np.cos(phi)
-    y = rho * np.sin(phi)
-    return np.array([x, y])
-
-
 # CHANGE DIMMENSIONS TO 31X201 (31 FREQUENCY, 201 TIME SAMPLES)
 def prepare_dataset(noise, data):
     """ Function for adding noise over signal to provide data for training """
@@ -195,3 +189,56 @@ class Rescale(object):
             return {'signal': torch.from_numpy(signal),
                     'noise': torch.from_numpy(noise),
                     'processed': torch.from_numpy(processed)}
+
+
+class Normalize(object):
+    '''Normalizes Tensor values to given mean and standard deviation'''
+
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, sample):
+        if len(sample) == 4:
+            stft_dict = sample
+
+            transform = transforms.Normalize(self.mean, self.std)
+
+            stft_dict['Zxx_signal'] = stft_dict['Zxx_signal'].unsqueeze(0)
+            stft_dict['Zxx_processed'] = stft_dict['Zxx_processed'].unsqueeze(0)
+
+            stft_dict['Zxx_signal'] = transform(stft_dict['Zxx_signal'])
+            stft_dict['Zxx_processed'] = transform(stft_dict['Zxx_processed'])
+
+            stft_dict['Zxx_signal'] = stft_dict['Zxx_signal'].squeeze(0)
+            stft_dict['Zxx_processed'] = stft_dict['Zxx_processed'].squeeze(0)
+
+            return {'f': sample['f'], 't': sample['t'], 'Zxx_signal': stft_dict['Zxx_signal'],
+                    'Zxx_processed': stft_dict['Zxx_processed']}
+        else:
+
+            signal, noise, processed = sample['signal'], sample['noise'], sample['processed']
+
+            transform = transforms.Normalize(self.mean, self.std)
+
+            signal = signal.unsqueeze(0)
+            signal = signal.unsqueeze(0)
+            signal = transform(signal)
+            signal = signal.squeeze(0)
+            signal = signal.squeeze(0)
+
+            noise = noise.unsqueeze(0)
+            noise = noise.unsqueeze(0)
+            noise = transform(noise)
+            noise = noise.squeeze(0)
+            noise = noise.squeeze(0)
+
+            processed = processed.unsqueeze(0)
+            processed = processed.unsqueeze(0)
+            processed = transform(processed)
+            processed = processed.squeeze(0)
+            processed = processed.squeeze(0)
+
+            return {'signal': signal,
+                    'noise': noise,
+                    'processed': processed}

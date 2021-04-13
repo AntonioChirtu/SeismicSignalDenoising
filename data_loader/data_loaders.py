@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import os
 from random import randint
-from utils.util import prepare_dataset, pol2cart
+from utils.util import prepare_dataset
 from scipy.signal import stft, resample
 from matplotlib import pyplot as plt
 
@@ -32,8 +32,8 @@ class SeismicDatasetLoader(BaseDataLoader):
                              if file.endswith('.npz')])  # and np.isin(int(file[0:4]), self.idx_list)])
 
     def __len__(self):
-        return len(self.signal)
-        # return 1000
+        #return len(self.signal)
+        return 1000
 
     def __getitem__(self, item):
         if torch.is_tensor(item):
@@ -42,7 +42,8 @@ class SeismicDatasetLoader(BaseDataLoader):
         # np_Array = np.load(self.signal[item])
         # print(np_Array['data'])
 
-        noise = np.load(self.noise[randint(0, len(self.signal))], allow_pickle=True)['arr_0']
+        noise = np.load(self.noise[randint(0, 99)], allow_pickle=True)['arr_0']
+        item = np.random.randint(0,99)
         signal_dict = np.load(self.signal[item], allow_pickle=True)['data']
         # print(signal_dict.shape)
         if len(signal_dict.shape) > 1:

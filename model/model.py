@@ -52,10 +52,7 @@ class Net(BaseModel):
         self.conv17 = nn.Conv2d(16, 8, kernel_size=3, padding=(1,1))
         self.bn22 = nn.BatchNorm2d(num_features=8)
         self.conv18 = nn.Conv1d(8, 2, kernel_size=(1, 1))
-        
-        #self.conv2_drop = nn.Dropout2d()
-        #self.fc1 = nn.Linear(320, 50)
-        #self.fc2 = nn.Linear(50)
+
 
     def forward(self, x):
         #print('x_shape:', x.shape)
@@ -101,6 +98,6 @@ class Net(BaseModel):
         #print("Last layer: ", x_24.size())
         #print("Last layer: ", x_24.view(x_24.size(0), x_24.size(1), -1).size())
         x_25 = x_24.view(x_24.size(0), x_24.size(1), -1)
-        x_25 = x_25.squeeze(0)
-        return x_25.view(x_25.size(1), x_25.size(0))
-        #return x
+        #x_25 = x_25.squeeze(0)
+        #return x_25.view(x_25.size(1), x_25.size(0))
+        return x_25
