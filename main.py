@@ -41,8 +41,10 @@ transform = transforms.Compose([
 
 
 def main():
-    train_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=TRAIN_DIR, noise_dir=NOISE_DIR, transform=transform)
-    test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR, transform=transform)
+    train_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=TRAIN_DIR, noise_dir=NOISE_DIR, snr=10,
+                                         transform=transform)
+    test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR, snr=10,
+                                        transform=transform)
 
     # train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(round(train_size * dataset_size)),
     #                                                                     int(round(test_size * dataset_size))])
@@ -61,7 +63,7 @@ def main():
     # plt.plot(sample['signal'])
     # plt.show()
     # print(cnt)
-    sample, stft_dict_tmp, mask, _, _ = train_dataset[8]
+    sample, stft_dict_tmp, mask, _, _, _ = train_dataset[8]
     # plt.hist(np.array(stft_dict_tmp['Zxx_processed']).ravel(), bins=50, density=True);
     # plt.xlabel("pixel values")
     # plt.ylabel("relative frequency")
@@ -122,42 +124,43 @@ def main():
     SNR_orig = []
     SNR = []
 
-    for epoch in range(20):
-        error_list = []
-        running_loss = 0.0
-        for i, data in enumerate(train_loader, 0):
-            with torch.enable_grad():
-
-                sample, stft_dict, signal_mask, noise_mask, _ = data
-
-                signal_mask = signal_mask.to(device)
-                noise_mask = noise_mask.to(device)
-                sample = sample['signal'].to(device)
-                inputs = stft_dict['Zxx_processed'].to(device)
-
-                real_inputs = inputs.real
-                imag_inputs = inputs.imag
-                composed_inputs = torch.stack((real_inputs, imag_inputs), 1)
-                composed_inputs = composed_inputs.to(device)
-
-                labels = torch.stack([signal_mask, noise_mask])
-                labels = signal_mask.view(signal_mask.size(0), -1)
-                labels = labels.squeeze(0)
-                labels = labels.long()
-
-                optimizer.zero_grad()
-
-                outputs = net(composed_inputs)
-
-                loss = criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()
-
-                running_loss += loss.item()
-                if i % 20 == 19:
-                    print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 20))
-                    running_loss = 0.0
-    print('Finished Training')
+    # for epoch in range(20):
+    #     error_list = []
+    #     running_loss = 0.0
+    #     for i, data in enumerate(train_loader, 0):
+    #         train_dataset.snr = np.random.randint(0, 13)
+    #         with torch.enable_grad():
+    #
+    #             sample, stft_dict, signal_mask, noise_mask, _, _ = data
+    #
+    #             signal_mask = signal_mask.to(device)
+    #             noise_mask = noise_mask.to(device)
+    #             sample = sample['signal'].to(device)
+    #             inputs = stft_dict['Zxx_processed'].to(device)
+    #
+    #             real_inputs = inputs.real
+    #             imag_inputs = inputs.imag
+    #             composed_inputs = torch.stack((real_inputs, imag_inputs), 1)
+    #             composed_inputs = composed_inputs.to(device)
+    #
+    #             labels = torch.stack([signal_mask, noise_mask])
+    #             labels = signal_mask.view(signal_mask.size(0), -1)
+    #             labels = labels.squeeze(0)
+    #             labels = labels.long()
+    #
+    #             optimizer.zero_grad()
+    #
+    #             outputs = net(composed_inputs)
+    #
+    #             loss = criterion(outputs, labels)
+    #             loss.backward()
+    #             optimizer.step()
+    #
+    #             running_loss += loss.item()
+    #             if i % 20 == 19:
+    #                 print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 20))
+    #                 running_loss = 0.0
+    # print('Finished Training')
 
     # plt.figure()
     # plt.plot(MSE, 'x')
@@ -167,56 +170,65 @@ def main():
 
     torch.save(net.state_dict(), save_path)
 
-    correct = 0
-    total = 0
-    MSE = []
+    model = Net()
+    model.load_state_dict(torch.load(save_path))
+    model.eval()
+
+    SNR_mean = []
     with torch.no_grad():
-        for data in test_loader:
-            sample, images, signal_labels, noise_labels, noise = data
-            noise_labels = noise_labels.to(device)
-            signal_labels = signal_labels.to(device)
-            sample = sample['signal'].to(device)
-            images = images['Zxx_processed'].to(device)
+        for i in range(13):
+            test_dataset.snr = i
+            for data in test_loader:
+                sample, images, signal_labels, noise_labels, noise, noisy_snr = data
+                noise_labels = noise_labels.to(device)
+                signal_labels = signal_labels.to(device)
+                sample = sample['signal'].to(device)
+                images = images['Zxx_processed'].to(device)
 
-            composed_images = torch.stack((images.real, images.imag), 1)
-            composed_images = composed_images.to(device)
+                composed_images = torch.stack((images.real, images.imag), 1)
+                composed_images = composed_images.to(device)
 
-            sample = sample.squeeze(0)
-            sample = sample.cpu().detach().numpy()
+                sample = sample.squeeze(0)
+                sample = sample.cpu().detach().numpy()
 
-            # plt.figure()
-            # plt.plot(sample)
-            # plt.title('Original signal')
+                # plt.figure()
+                # plt.plot(sample)
+                # plt.title('Original signal')
 
-            signal_labels = signal_labels.view(signal_labels.size(0), -1)
-            signal_labels = signal_labels.squeeze(0)
+                signal_labels = signal_labels.view(signal_labels.size(0), -1)
+                signal_labels = signal_labels.squeeze(0)
 
-            outputs = net(composed_images)
-            outputs = outputs.view(outputs.size(0), outputs.size(1), 31, -1)
+                outputs = net(composed_images)
+                outputs = outputs.view(outputs.size(0), outputs.size(1), 31, -1)
 
-            signal_approx = composed_images * outputs
+                signal_approx = composed_images * outputs
 
-            new_signal_approx = signal_approx[:, 0, :, :] + 1j * signal_approx[:, 1, :, :]
+                new_signal_approx = signal_approx[:, 0, :, :] + 1j * signal_approx[:, 1, :, :]
 
-            _, new_signal_approx = istft(new_signal_approx.cpu().detach().numpy(), fs=Fs, nperseg=nperseg, nfft=nfft,
-                                         boundary='zeros')
+                _, new_signal_approx = istft(new_signal_approx.cpu().detach().numpy(), fs=Fs, nperseg=nperseg,
+                                             nfft=nfft,
+                                             boundary='zeros')
 
-            new_signal_approx = new_signal_approx.squeeze(0)
-            rescaled_signal = 0.5 + (new_signal_approx - new_signal_approx.mean()) * (0.5 / new_signal_approx.std())
+                new_signal_approx = new_signal_approx.squeeze(0)
+                rescaled_signal = 0.5 + (new_signal_approx - new_signal_approx.mean()) * (0.5 / new_signal_approx.std())
 
-            # plt.figure()
-            # plt.plot(rescaled_signal)
-            # plt.title('Output Signal')
-            # plt.show()
+                # plt.figure()
+                # plt.plot(rescaled_signal)
+                # plt.title('Output Signal')
+                # plt.show()
 
-            snr_calculat = 20 * np.log10(np.std(rescaled_signal) / np.std(sample - rescaled_signal))
-            SNR.append(snr_calculat)
-            SNR_orig.append(10)
+                snr_calculat = 20 * np.log10(np.std(rescaled_signal) / np.std(sample - rescaled_signal))
+                SNR.append(snr_calculat)
+            print(i)
+            SNR_mean.append(sum(SNR) / len(SNR))
+            SNR_orig.append(i)
 
     plt.figure()
     # plt.plot(MSE, 'x')
-    plt.plot(SNR, '*')
+    plt.plot(SNR_mean, '*')
+    plt.legend('Orange - after denoising')
     plt.plot(SNR_orig, '*')
+    plt.legend('Blue - original')
     plt.show()
 
 

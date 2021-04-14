@@ -78,7 +78,7 @@ class MetricTracker:
 
 
 # CHANGE DIMMENSIONS TO 31X201 (31 FREQUENCY, 201 TIME SAMPLES)
-def prepare_dataset(noise, data):
+def prepare_dataset(noise, data, snr):
     """ Function for adding noise over signal to provide data for training """
 
     semnal_e = data
@@ -100,12 +100,11 @@ def prepare_dataset(noise, data):
 
     # SNR[dB] = 10 * log_10 (P_signal / P_noise) = 10 * log_10 (P_signal / P_noise), std_noise = sqrt(P_noise)
     # SNR[dB] = 20 * log_10 (std_signal / std_noise) --> e gresita formula (5) din articol
-    snr = 10
     std_signal = np.std(x)
     std_noise = std_signal / (10 ** (snr / 20))
 
     # daca noise are aceeasi lungime
-    if len(noise) == len(data):
+    if len(noise) == len(x):
         noise = std_noise * np.random.randn(x.shape[0])  # noise ~ N(medie = 0, dispersie = sigma_noise)
 
     # daca noise are lungime mai mica, se insereaza zgomotul la o pozitie aleatoare din semnal
@@ -130,7 +129,7 @@ def prepare_dataset(noise, data):
     x_fft = x_fft / np.std(x_fft)
     noisy_fft = noisy_fft / np.std(noisy_fft)
 
-    return {'f': f, 't': t, 'Zxx_processed': noisy_fft, 'Zxx_signal': x_fft, 'Zxx_noise': noise_fft}, noisy_x, noise
+    return {'f': f, 't': t, 'Zxx_processed': noisy_fft, 'Zxx_signal': x_fft, 'Zxx_noise': noise_fft}, noisy_x, noise, snr_calculat
 
 
 class ToTensor(object):

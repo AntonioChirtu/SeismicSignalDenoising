@@ -12,11 +12,12 @@ NOISE_SAMPLES = 100
 
 
 class SeismicDatasetLoader(BaseDataLoader):
-    def __init__(self, root_dir, signal_dir, noise_dir, transform=None):
+    def __init__(self, root_dir, signal_dir, noise_dir, snr, transform=None):
         self.root_dir = root_dir
         self.signal_dir = signal_dir
         self.noise_dir = noise_dir
         self.transform = transform
+        self.snr = snr
 
         assert os.path.exists(os.path.join(self.root_dir, self.signal_dir)), 'Path to signal images cannot be found'
         assert os.path.exists(os.path.join(self.root_dir, self.noise_dir)), 'Path to noise images cannot be found'
@@ -39,20 +40,17 @@ class SeismicDatasetLoader(BaseDataLoader):
         if torch.is_tensor(item):
             item = item.tolist()
 
-        # np_Array = np.load(self.signal[item])
-        # print(np_Array['data'])
-
         noise = np.load(self.noise[randint(0, 99)], allow_pickle=True)['arr_0']
         item = np.random.randint(0, 99)
         signal_dict = np.load(self.signal[item], allow_pickle=True)['data']
-        # print(signal_dict.shape)
+
         if len(signal_dict.shape) > 1:
             signal = signal_dict[:, 0]
         else:
             signal = signal_dict
 
-        stft_dict, processed, noise = prepare_dataset(noise, signal)
-        # print(stft_dict['Zxx_processed'].shape)
+        stft_dict, processed, noise, noisy_snr = prepare_dataset(noise, signal, self.snr)
+
         sample = {'signal': signal, 'noise': noise, 'processed': processed}
 
         # Ms
@@ -71,4 +69,4 @@ class SeismicDatasetLoader(BaseDataLoader):
             sample = self.transform(sample)
             stft_dict = self.transform(stft_dict)
 
-        return sample, stft_dict, signal_mask, noise_mask, noise
+        return sample, stft_dict, signal_mask, noise_mask, noise, noisy_snr
