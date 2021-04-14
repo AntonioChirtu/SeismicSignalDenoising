@@ -225,10 +225,8 @@ def main():
 
     plt.figure()
     # plt.plot(MSE, 'x')
-    plt.plot(SNR_mean, '*')
-    plt.legend('Orange - after denoising')
-    plt.plot(SNR_orig, '*')
-    plt.legend('Blue - original')
+    plt.plot(SNR_mean, '*', label='after denoising')
+    plt.plot(SNR_orig, '*', label='original')
     plt.show()
 
 
