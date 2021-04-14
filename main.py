@@ -34,7 +34,7 @@ normalize = Normalize(0.5, 0.5)
 transform = transforms.Compose([
     tensor,
     normalize
-    #rescale
+    # rescale
     # transforms.ToTensor(),
     # transforms.Normalize([0.5], [0.5])
 ])
@@ -44,36 +44,36 @@ def main():
     train_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=TRAIN_DIR, noise_dir=NOISE_DIR, transform=transform)
     test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR, transform=transform)
 
-    #train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(round(train_size * dataset_size)),
-     #                                                                     int(round(test_size * dataset_size))])
+    # train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(round(train_size * dataset_size)),
+    #                                                                     int(round(test_size * dataset_size))])
 
     train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=2)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=2)
 
     cnt = 0
     amp = 2 * np.sqrt(2)
-    #for i in range(len(dataset)):
-     #   if (i != 45):
-      #      sample, _, _, _ = dataset[i]
-        # print('Sample', i, ':')
-       # if len(sample['signal']) == 15000:
-        #    cnt += 1
-            # plt.plot(sample['signal'])
-            # plt.show()
+    # for i in range(len(dataset)):
+    #   if (i != 45):
+    #      sample, _, _, _ = dataset[i]
+    # print('Sample', i, ':')
+    # if len(sample['signal']) == 15000:
+    #    cnt += 1
+    # plt.plot(sample['signal'])
+    # plt.show()
     # print(cnt)
     sample, stft_dict_tmp, mask, _, _ = train_dataset[8]
-    #plt.hist(np.array(stft_dict_tmp['Zxx_processed']).ravel(), bins=50, density=True);
-    #plt.xlabel("pixel values")
-    #plt.ylabel("relative frequency")
-    #plt.title("distribution of pixels");
+    # plt.hist(np.array(stft_dict_tmp['Zxx_processed']).ravel(), bins=50, density=True);
+    # plt.xlabel("pixel values")
+    # plt.ylabel("relative frequency")
+    # plt.title("distribution of pixels");
     # print(stft_dict_tmp['Zxx_processed'].shape)
     # print(mask.shape)
     # plt.show()
-    #plt.figure()
-    #plt.plot(sample['signal'], 'r')
-    #plt.figure()
-    #plt.plot(sample['noise'], 'b')
-    #plt.show()
+    # plt.figure()
+    # plt.plot(sample['signal'], 'r')
+    # plt.figure()
+    # plt.plot(sample['noise'], 'b')
+    # plt.show()
     # plt.figure()
     # plt.plot(sample['processed'], 'm', sample['noise'], 'b')
     # plt.figure()
@@ -122,7 +122,7 @@ def main():
     SNR_orig = []
     SNR = []
 
-    for epoch in range(2):
+    for epoch in range(20):
         error_list = []
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
@@ -140,24 +140,6 @@ def main():
                 composed_inputs = torch.stack((real_inputs, imag_inputs), 1)
                 composed_inputs = composed_inputs.to(device)
 
-                # print(signal_mask.shape)
-                # print(inputs.shape)
-
-                signal_approx = signal_mask * real_inputs
-                signal_approx = signal_approx.squeeze(0)
-                sample = sample.squeeze(0)
-
-                # print(signal_approx.shape)
-
-                sample = sample[nt:2 * nt]
-
-                _, signal_approx = istft(signal_approx.cpu(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
-
-                #rescaled_signal = signal_approx - np.min(signal_approx) / (signal_approx - np.max(signal_approx))
-                # print(signal_approx.shape)
-
-                sample = sample.cpu().detach().numpy()
-
                 labels = torch.stack([signal_mask, noise_mask])
                 labels = signal_mask.view(signal_mask.size(0), -1)
                 labels = labels.squeeze(0)
@@ -166,7 +148,6 @@ def main():
                 optimizer.zero_grad()
 
                 outputs = net(composed_inputs)
-                output_plots = outputs[:, 0].cpu().detach().numpy()
 
                 loss = criterion(outputs, labels)
                 loss.backward()
@@ -176,14 +157,13 @@ def main():
                 if i % 20 == 19:
                     print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 20))
                     running_loss = 0.0
-        #MSE.append(sum(error_list) / len(error_list))
     print('Finished Training')
 
-    #plt.figure()
-    #plt.plot(MSE, 'x')
-    #plt.figure()
-    #plt.plot(SNR_orig, SNR, 'x')
-    #plt.show()
+    # plt.figure()
+    # plt.plot(MSE, 'x')
+    # plt.figure()
+    # plt.plot(SNR_orig, SNR, 'x')
+    # plt.show()
 
     torch.save(net.state_dict(), save_path)
 
@@ -201,56 +181,40 @@ def main():
             composed_images = torch.stack((images.real, images.imag), 1)
             composed_images = composed_images.to(device)
 
-            signal_approx = signal_labels * images.real
-            signal_approx = signal_approx.squeeze(0)
             sample = sample.squeeze(0)
-
-            _, signal_approx = istft(signal_approx.cpu().detach().numpy(), fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
-
-            #rescaled_signal = (signal_approx - np.min(signal_approx)) / (np.max(signal_approx) - np.min(signal_approx))
-            rescaled_signal = 0.5 + (signal_approx - signal_approx.mean()) * (0.5 / signal_approx.std())
             sample = sample.cpu().detach().numpy()
-            #plt.figure()
-            #plt.plot(rescaled_signal)
-            #plt.figure()
-            #plt.plot(sample)
-            #plt.show()
-            if len(sample) == 3000:
-                sample = sample
-            else:
-                sample = sample[nt:2 * nt]
+
+            # plt.figure()
+            # plt.plot(sample)
+            # plt.title('Original signal')
 
             signal_labels = signal_labels.view(signal_labels.size(0), -1)
             signal_labels = signal_labels.squeeze(0)
 
             outputs = net(composed_images)
+            outputs = outputs.view(outputs.size(0), outputs.size(1), 31, -1)
 
-            plot_outputs = outputs[:, 0].cpu().detach().numpy()
+            signal_approx = composed_images * outputs
 
-            plot_signal_labels = signal_labels.cpu().detach().numpy()
+            new_signal_approx = signal_approx[:, 0, :, :] + 1j * signal_approx[:, 1, :, :]
 
-            #plt.figure()
-            #plt.imshow(plot_outputs)
-            #plt.title('Network output')
-            #plt.figure()
-            #plt.imshow(plot_signal_labels)
-            #plt.title('Signal_labels')
-            #plt.show()
+            _, new_signal_approx = istft(new_signal_approx.cpu().detach().numpy(), fs=Fs, nperseg=nperseg, nfft=nfft,
+                                         boundary='zeros')
+
+            new_signal_approx = new_signal_approx.squeeze(0)
+            rescaled_signal = 0.5 + (new_signal_approx - new_signal_approx.mean()) * (0.5 / new_signal_approx.std())
+
+            # plt.figure()
+            # plt.plot(rescaled_signal)
+            # plt.title('Output Signal')
+            # plt.show()
 
             snr_calculat = 20 * np.log10(np.std(rescaled_signal) / np.std(sample - rescaled_signal))
             SNR.append(snr_calculat)
             SNR_orig.append(10)
 
-            # _, predicted = torch.max(outputs.data, 1)
-            predicted = outputs[:, 0]
-            total += signal_labels.size(0)
-
-            correct += (predicted == signal_labels).sum().item()
-
-    # print('Accuracy of the network on the test images: %d %%' % (
-    #       100 * correct / total))
     plt.figure()
-    #plt.plot(MSE, 'x')
+    # plt.plot(MSE, 'x')
     plt.plot(SNR, '*')
     plt.plot(SNR_orig, '*')
     plt.show()

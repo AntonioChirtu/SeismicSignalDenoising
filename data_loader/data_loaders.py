@@ -32,7 +32,7 @@ class SeismicDatasetLoader(BaseDataLoader):
                              if file.endswith('.npz')])  # and np.isin(int(file[0:4]), self.idx_list)])
 
     def __len__(self):
-        #return len(self.signal)
+        # return len(self.signal)
         return 1000
 
     def __getitem__(self, item):
@@ -43,7 +43,7 @@ class SeismicDatasetLoader(BaseDataLoader):
         # print(np_Array['data'])
 
         noise = np.load(self.noise[randint(0, 99)], allow_pickle=True)['arr_0']
-        item = np.random.randint(0,99)
+        item = np.random.randint(0, 99)
         signal_dict = np.load(self.signal[item], allow_pickle=True)['data']
         # print(signal_dict.shape)
         if len(signal_dict.shape) > 1:
@@ -67,11 +67,8 @@ class SeismicDatasetLoader(BaseDataLoader):
                          np.sqrt(stft_dict['Zxx_noise'].real ** 2 + stft_dict['Zxx_noise'].imag ** 2)) / np.abs(
                          np.sqrt(stft_dict['Zxx_signal'].real ** 2 + stft_dict['Zxx_signal'].imag ** 2)))
 
-
         if self.transform:
             sample = self.transform(sample)
             stft_dict = self.transform(stft_dict)
-
-
 
         return sample, stft_dict, signal_mask, noise_mask, noise
