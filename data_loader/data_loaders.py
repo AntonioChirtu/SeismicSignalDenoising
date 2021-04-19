@@ -12,12 +12,13 @@ NOISE_SAMPLES = 100
 
 
 class SeismicDatasetLoader(BaseDataLoader):
-    def __init__(self, root_dir, signal_dir, noise_dir, snr, transform=None):
+    def __init__(self, root_dir, signal_dir, noise_dir, snr, type, transform=None):
         self.root_dir = root_dir
         self.signal_dir = signal_dir
         self.noise_dir = noise_dir
         self.transform = transform
         self.snr = snr
+        self.type = type
 
         assert os.path.exists(os.path.join(self.root_dir, self.signal_dir)), 'Path to signal images cannot be found'
         assert os.path.exists(os.path.join(self.root_dir, self.noise_dir)), 'Path to noise images cannot be found'
@@ -27,21 +28,27 @@ class SeismicDatasetLoader(BaseDataLoader):
         # lengths =[d.shape[0] for d in data]
         self.signal = sorted([os.path.join(self.root_dir, signal_dir, file) for file in
                               os.listdir(os.path.join(self.root_dir, self.signal_dir))
-                              if file.endswith('.npz')])  # and np.isin(int(file[0:4]), self.idx_list)])
+                              if file.endswith('.npz')])
         self.noise = sorted([os.path.join(self.root_dir, noise_dir, file) for file in
                              os.listdir(os.path.join(self.root_dir, self.noise_dir))
-                             if file.endswith('.npz')])  # and np.isin(int(file[0:4]), self.idx_list)])
+                             if file.endswith('.npz')])
 
     def __len__(self):
         # return len(self.signal)
-        return 1000
+        if self.type == 'train':
+            l = 1000
+        else:
+            l = len(self.signal)
+        return l
 
     def __getitem__(self, item):
         if torch.is_tensor(item):
             item = item.tolist()
 
-        noise = np.load(self.noise[randint(0, 99)], allow_pickle=True)['arr_0']
-        item = np.random.randint(0, 99)
+        noise = np.load(self.noise[randint(0, len(self.noise) - 1)], allow_pickle=True)['arr_0']
+        while sum(noise) == 0:
+            noise = np.load(self.noise[randint(0, len(self.noise) - 1)], allow_pickle=True)['arr_0']
+        item = np.random.randint(0, len(self.signal) - 1)
         signal_dict = np.load(self.signal[item], allow_pickle=True)['data']
 
         if len(signal_dict.shape) > 1:

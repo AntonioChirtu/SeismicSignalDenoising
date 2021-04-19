@@ -77,7 +77,6 @@ class MetricTracker:
         return dict(self._data.average)
 
 
-# CHANGE DIMMENSIONS TO 31X201 (31 FREQUENCY, 201 TIME SAMPLES)
 def prepare_dataset(noise, data, snr):
     """ Function for adding noise over signal to provide data for training """
 
@@ -95,7 +94,15 @@ def prepare_dataset(noise, data, snr):
         x = semnal_e
     else:
         x = semnal_e[
-            nt:2 * nt]  # selectam 3000 esantioane pentru a avea 201 ferestre temporale suprapuse in care se calculeaza STFT
+            nt:2 * nt]  # selectam 3000 esantioane pentru a avea 201 ferestre temporale suprapuse in care se
+        # calculeaza STFT
+    # for idx in range(len(semnal_e)):
+    #     if np.isnan(semnal_e[idx]):
+    #         semnal_e[idx] = (semnal_e[idx - 1] + semnal_e[idx + 1]) / 2
+    # for idx in range(len(noise)):
+    #     if np.isnan(noise[idx]):
+    #         noise[idx] = (noise[idx - 1] + noise[idx + 1]) / 2
+
     # numar_ferestre_temporale ~ (size_x - nperseg)/(nperseg-overlap), overlap = nperseg // 2
 
     # SNR[dB] = 10 * log_10 (P_signal / P_noise) = 10 * log_10 (P_signal / P_noise), std_noise = sqrt(P_noise)
@@ -105,14 +112,15 @@ def prepare_dataset(noise, data, snr):
 
     # daca noise are aceeasi lungime
     if len(noise) == len(x):
-        noise = std_noise * np.random.randn(x.shape[0])  # noise ~ N(medie = 0, dispersie = sigma_noise)
+        noise = std_noise * noise  # noise ~ N(medie = 0, dispersie = sigma_noise)
 
     # daca noise are lungime mai mica, se insereaza zgomotul la o pozitie aleatoare din semnal
     else:
         noise_length = len(noise)
+        noise_cp = noise
         position = np.random.randint(0, x.shape[0] - noise_length)
         noise = np.zeros(x.shape[0])
-        noise[position:position + noise_length] = np.random.randn(noise_length)
+        noise[position:position + noise_length] = noise_cp
         noise = noise / np.std(noise)
         noise = std_noise * noise
 
@@ -129,7 +137,8 @@ def prepare_dataset(noise, data, snr):
     x_fft = x_fft / np.std(x_fft)
     noisy_fft = noisy_fft / np.std(noisy_fft)
 
-    return {'f': f, 't': t, 'Zxx_processed': noisy_fft, 'Zxx_signal': x_fft, 'Zxx_noise': noise_fft}, noisy_x, noise, snr_calculat
+    return {'f': f, 't': t, 'Zxx_processed': noisy_fft, 'Zxx_signal': x_fft,
+            'Zxx_noise': noise_fft}, noisy_x, noise, snr_calculat
 
 
 class ToTensor(object):
@@ -181,13 +190,13 @@ class Rescale(object):
             min_value_sig = np.amin(signal)
             lower_value_sig = np.amax(signal) - min_value_sig
 
-            processed = np.array(
-                [(x - min_value_proc) / lower_value_proc for x in processed])
-            signal = np.array([(x - min_value_sig) / lower_value_sig for x in signal])
+            processed_new = np.array(
+                [20 * (x - min_value_proc) / lower_value_proc - 10 for x in processed])
+            signal_new = np.array([20 * (x - min_value_sig) / lower_value_sig - 10 for x in signal])
 
-            return {'signal': torch.from_numpy(signal),
+            return {'signal': torch.from_numpy(signal_new),
                     'noise': torch.from_numpy(noise),
-                    'processed': torch.from_numpy(processed)}
+                    'processed': torch.from_numpy(processed_new)}
 
 
 class Normalize(object):
@@ -211,7 +220,7 @@ class Normalize(object):
             processed_imag_std = stft_dict['Zxx_processed'].imag.std()
 
             stft_dict['Zxx_signal'].real = self.mean + (stft_dict['Zxx_signal'].real - signal_real_mean) * (
-                        self.std / signal_real_std)
+                    self.std / signal_real_std)
             stft_dict['Zxx_signal'].imag = self.mean + (stft_dict['Zxx_signal'].imag - signal_imag_mean) * (
                     self.std / signal_imag_std)
             stft_dict['Zxx_processed'].real = self.mean + (stft_dict['Zxx_processed'].real - processed_real_mean) * (
