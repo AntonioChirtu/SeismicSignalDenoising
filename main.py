@@ -45,7 +45,7 @@ def main():
     test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR, snr=10, type='test',
                                         transform=transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=8)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=8)
 
     sample, stft_dict_tmp, mask, _, _, _ = train_dataset[8]
@@ -67,7 +67,7 @@ def main():
     SNR_orig = []
     SNR = []
 
-    for epoch in range(20):
+    for epoch in range(1):
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             train_dataset.snr = np.random.randint(0, 13)
@@ -126,7 +126,7 @@ def main():
                 images = images['Zxx_processed']
 
                 composed_images = torch.stack((images.real, images.imag), 1)
-                composed_images = composed_images.to(device)
+                composed_images = composed_images# .to(device)
 
                 sample = sample.squeeze(0)
                 sample = sample.numpy()
