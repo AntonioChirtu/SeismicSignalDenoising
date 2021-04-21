@@ -67,7 +67,7 @@ def main():
     SNR_orig = []
     SNR = []
 
-    for epoch in range(1):
+    for epoch in range(20):
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             train_dataset.snr = np.random.randint(0, 13)
@@ -102,12 +102,6 @@ def main():
                     running_loss = 0.0
     print('Finished Training')
 
-    plt.figure()
-    plt.plot(MSE, 'x')
-    plt.figure()
-    plt.plot(SNR_orig, SNR, 'x')
-    plt.show()
-
     torch.save(net.state_dict(), save_path)
 
     model = Net()
@@ -126,7 +120,7 @@ def main():
                 images = images['Zxx_processed']
 
                 composed_images = torch.stack((images.real, images.imag), 1)
-                composed_images = composed_images# .to(device)
+                composed_images = composed_images.to(device)
 
                 sample = sample.squeeze(0)
                 sample = sample.numpy()
