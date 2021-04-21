@@ -8,7 +8,7 @@ from torchvision import transforms
 
 from data_loader.data_loaders import SeismicDatasetLoader
 from model.model import Net
-from model.loss import softXEnt, softCrossEntropy
+from model.loss import softCrossEntropy
 from utils.util import ToTensor, Rescale, Normalize
 from scipy.signal import istft, resample
 
@@ -34,10 +34,8 @@ normalize = Normalize(0.5, 0.5)
 
 transform = transforms.Compose([
     tensor,
-    normalize
-    # rescale
-    # transforms.ToTensor(),
-    # transforms.Normalize([0.5], [0.5])
+    # normalize
+    rescale
 ])
 
 
@@ -47,17 +45,14 @@ def main():
     test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR, snr=10, type='test',
                                         transform=transform)
 
-    # train_dataset, test_dataset = torch.utils.data.random_split(dataset, [int(round(train_size * dataset_size)),
-    #                                                                     int(round(test_size * dataset_size))])
-
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=8)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=8)
 
     sample, stft_dict_tmp, mask, _, _, _ = train_dataset[8]
-    plt.figure()
-    plt.plot(sample['processed'])
-    plt.figure()
-    plt.plot(sample['signal'])
+    # plt.figure()
+    # plt.plot(sample['processed'])
+    # plt.figure()
+    # plt.plot(sample['signal'])
     # plt.show()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -69,13 +64,10 @@ def main():
     optimizer = optim.SGD(net.parameters(), lr=1e-3, momentum=0.9)
 
     MSE = []
-    RMS_sig = 0
-    RMS_noise = 0
     SNR_orig = []
     SNR = []
 
     for epoch in range(20):
-        error_list = []
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             train_dataset.snr = np.random.randint(0, 13)
@@ -100,7 +92,6 @@ def main():
 
                 outputs = net(composed_inputs)
 
-                # loss = criterion(outputs, labels)
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
@@ -140,10 +131,6 @@ def main():
                 sample = sample.squeeze(0)
                 sample = sample.numpy()
 
-                # plt.figure()
-                # plt.plot(sample)
-                # plt.title('Original signal')
-
                 signal_labels = signal_labels.view(signal_labels.size(0), -1)
                 signal_labels = signal_labels.squeeze(0)
 
@@ -161,10 +148,13 @@ def main():
                 new_signal_approx = new_signal_approx.squeeze(0)
                 rescaled_signal = 0.5 + (new_signal_approx - new_signal_approx.mean()) * (0.5 / new_signal_approx.std())
 
-                # plt.figure()
-                # plt.plot(rescaled_signal)
-                # plt.title('Output Signal')
-                # plt.show()
+                plt.figure()
+                plt.plot(sample)
+                plt.title('Original signal')
+                plt.figure()
+                plt.plot(rescaled_signal)
+                plt.title('Output Signal')
+                plt.show()
 
                 snr_calculat = 20 * np.log10(np.std(rescaled_signal) / np.std(sample - rescaled_signal))
                 SNR.append(snr_calculat)
@@ -173,7 +163,6 @@ def main():
             SNR_orig.append(i)
 
     plt.figure()
-    # plt.plot(MSE, 'x')
     plt.plot((SNR_mean,), '*')
     plt.legend("Blue - after denoising")
     plt.plot((SNR_orig,), '*')
