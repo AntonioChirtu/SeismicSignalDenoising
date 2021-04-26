@@ -1,10 +1,9 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from base import BaseModel
 import torch
 
 
-class Net(BaseModel):
+class Net(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(2, 8, kernel_size=3, padding=(1,1))
@@ -55,8 +54,6 @@ class Net(BaseModel):
 
 
     def forward(self, x):
-        #print('x_shape:', x.shape)
-        #labels = labels.squeeze(0)
         x_1 = F.relu(self.bn1(self.conv1(x.double())))
         x_2 = F.relu(self.bn2(self.conv2(x_1)))
         x_3 = F.relu(self.bn3(self.conv3(x_2)))
@@ -85,19 +82,5 @@ class Net(BaseModel):
         x_22 = F.relu(self.bn22(self.conv17(x_21)))
         x_22 = torch.add(x_22, x_2)
         x_23 = F.relu(self.conv18(x_22))
-
-        
-        #x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        #x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        #x = x.view(-1, 320)
-        #x = F.relu(self.fc1(x))
-        #x = F.dropout(x, training=self.training)
-        #x = self.fc2(x)
-        
         x_24 = F.softmax(x_23, dim=1)
-        #print("Last layer: ", x_24.size())
-        #print("Last layer: ", x_24.view(x_24.size(0), x_24.size(1), -1).size())
-        x_25 = x_24.view(x_24.size(0), x_24.size(1), -1)
-        #x_25 = x_25.squeeze(0)
-        #return x_25.view(x_25.size(1), x_25.size(0))
-        return x_25
+        return x_24

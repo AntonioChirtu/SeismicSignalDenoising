@@ -1,79 +1,74 @@
-# from torch.utils.data import Dataset
-from base.base_data_loader import BaseDataLoader
+import random
+
+from torch.utils.data import Dataset
 import numpy as np
 import torch
 import os
-from random import randint
+from random import randint, choice
 from utils.util import prepare_dataset
-from scipy.signal import stft, resample
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 
 NOISE_SAMPLES = 100
 
 
-class SeismicDatasetLoader(BaseDataLoader):
-    def __init__(self, root_dir, signal_dir, noise_dir, snr, type, transform=None):
+class SeismicDatasetLoader(Dataset):
+    def __init__(self, root_dir, signal_dir, noise_dir, type, transform=None):
         self.root_dir = root_dir
         self.signal_dir = signal_dir
         self.noise_dir = noise_dir
-        self.transform = transform
-        self.snr = snr
         self.type = type
+        self.transform = transform
 
         assert os.path.exists(os.path.join(self.root_dir, self.signal_dir)), 'Path to signal images cannot be found'
         assert os.path.exists(os.path.join(self.root_dir, self.noise_dir)), 'Path to noise images cannot be found'
 
-        # data = [np.load(f, mmap_mode='r')) for f in os.listdir(signal_dir)]
-
-        # lengths =[d.shape[0] for d in data]
-        self.signal = sorted([os.path.join(self.root_dir, signal_dir, file) for file in
-                              os.listdir(os.path.join(self.root_dir, self.signal_dir))
-                              if file.endswith('.npz')])
-        self.noise = sorted([os.path.join(self.root_dir, noise_dir, file) for file in
-                             os.listdir(os.path.join(self.root_dir, self.noise_dir))
-                             if file.endswith('.npz')])
+        self.signal_files = sorted([os.path.join(self.root_dir, signal_dir, file) for file in
+                                    os.listdir(os.path.join(self.root_dir, self.signal_dir))
+                                    if file.endswith('.npz')])
+        self.noise_files = sorted([os.path.join(self.root_dir, noise_dir, file) for file in
+                                   os.listdir(os.path.join(self.root_dir, self.noise_dir))
+                                   if file.endswith('.npz')])
 
     def __len__(self):
-        # return len(self.signal)
         if self.type == 'train':
-            l = 1000
-        else:
-            l = len(self.signal)
+            l = 500
+        if self.type == 'test':
+            l = len(self.signal_files)
         return l
 
     def __getitem__(self, item):
         if torch.is_tensor(item):
             item = item.tolist()
 
-        noise = np.load(self.noise[randint(0, len(self.noise) - 1)], allow_pickle=True)['arr_0']
-        while sum(noise) == 0:
-            noise = np.load(self.noise[randint(0, len(self.noise) - 1)], allow_pickle=True)['arr_0']
-        item = np.random.randint(0, len(self.signal) - 1)
-        signal_dict = np.load(self.signal[item], allow_pickle=True)['data']
+        item = np.mod(item, len(self.signal_files))
 
+        signal_dict = np.load(self.signal_files[item], allow_pickle=True)['data']
         if len(signal_dict.shape) > 1:
             signal = signal_dict[:, 0]
         else:
             signal = signal_dict
 
-        stft_dict, processed, noise, noisy_snr = prepare_dataset(noise, signal, self.snr)
+        noise = np.load(self.noise_files[randint(0, len(self.noise_files) - 1)], allow_pickle=True)['arr_0']
+        while np.sum(noise) == 0:
+            noise = np.load(self.noise_files[randint(0, len(self.noise_files) - 1)], allow_pickle=True)['arr_0']
 
-        sample = {'signal': signal, 'noise': noise, 'processed': processed}
+        A_noise = random.randint(1, 4)
+        snr = random.randint(1, 12)
+        if self.type == 'train':
+            signal, noise, noisy_signal_fft, signal_fft, noise_fft = prepare_dataset(signal, noise, A_noise, snr,
+                                                                                     itp=3000)
+        if self.type == 'test':
+            signal, noise, noisy_signal_fft, signal_fft, noise_fft = prepare_dataset(signal, noise, A_noise, snr, itp=0)
 
-        # Ms
-        signal_mask = 1 / (
-                1 + np.abs(np.sqrt(stft_dict['Zxx_noise'].real ** 2 + stft_dict['Zxx_noise'].imag ** 2)) / np.abs(
-            np.sqrt(stft_dict['Zxx_signal'].real ** 2 + stft_dict['Zxx_signal'].imag ** 2)))
+        # Masks
+        r = np.abs(noise_fft) / (np.abs(signal_fft) + 1e-5)
+        targets = np.zeros(shape=(r.shape[0], r.shape[1], 2))
+        targets[:, :, 0] = 1 / (1 + r)  # Ms = signal mask
+        targets[:, :, 1] = r / (1 + r)  # Mn = noise mask
 
-        # Mn
-        noise_mask = (np.abs(np.sqrt(stft_dict['Zxx_noise'].real ** 2 + stft_dict['Zxx_noise'].imag ** 2)) / np.abs(
-            np.sqrt(stft_dict['Zxx_signal'].real ** 2 + stft_dict['Zxx_signal'].imag ** 2))) / (
-                             1 + np.abs(
-                         np.sqrt(stft_dict['Zxx_noise'].real ** 2 + stft_dict['Zxx_noise'].imag ** 2)) / np.abs(
-                         np.sqrt(stft_dict['Zxx_signal'].real ** 2 + stft_dict['Zxx_signal'].imag ** 2)))
+        inputs = np.zeros(shape=(noisy_signal_fft.shape[0], noisy_signal_fft.shape[1], 2))
+        inputs[:, :, 0] = self.transform(noisy_signal_fft.real)
+        inputs[:, :, 1] = self.transform(noisy_signal_fft.imag)
 
-        if self.transform:
-            sample = self.transform(sample)
-            stft_dict = self.transform(stft_dict)
-
-        return sample, stft_dict, signal_mask, noise_mask, noise, noisy_snr
+        return torch.from_numpy(signal), inputs, torch.from_numpy(noisy_signal_fft), torch.from_numpy(np.array(snr)), \
+               torch.from_numpy(targets)
