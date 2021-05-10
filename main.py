@@ -12,9 +12,9 @@ from model.loss import softCrossEntropy
 # from util import ToTensor, Rescale, Normalize
 from scipy.signal import istft
 
-TRAIN_DIR = 'train'
+TRAIN_DIR = 'chunk2'
 PRED_DIR = 'pred'
-NOISE_DIR = 'Noise_waveforms'
+NOISE_DIR = 'chunk1'
 path = './/data'
 save_path = 'denoising_net.pth'
 
@@ -108,13 +108,13 @@ def main():
             denoised_fft = noisy_signal_fft * outputs[:, 0, :, :]
             _, denoised_signal = istft(denoised_fft, fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
 
-            # plt.figure()
-            # plt.plot(signal.flatten())
-            # plt.title('Original signal')
-            # plt.figure()
-            # plt.plot(denoised_signal.flatten())
-            # plt.title('Output Signal')
-            # plt.show()
+            plt.figure()
+            plt.plot(signal.flatten())
+            plt.title('Original signal')
+            plt.figure()
+            plt.plot(denoised_signal.flatten())
+            plt.title('Output Signal')
+            plt.show()
             snr_calculat = 20 * np.log10(np.std(signal) / np.std(denoised_signal - signal))
             SNR_after_denoising.append(snr_calculat)
 

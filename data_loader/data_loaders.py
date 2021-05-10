@@ -6,9 +6,11 @@ import torch
 import os
 from random import randint, choice
 from utils.util import prepare_dataset
-import matplotlib.pyplot as plt
+import pandas as pd
+import h5py
 
-NOISE_SAMPLES = 100
+signal_hdf = "chunk2.hdf5"
+noise_hdf = "chunk1.hdf5"
 
 
 class SeismicDatasetLoader(Dataset):
@@ -22,12 +24,33 @@ class SeismicDatasetLoader(Dataset):
         assert os.path.exists(os.path.join(self.root_dir, self.signal_dir)), 'Path to signal images cannot be found'
         assert os.path.exists(os.path.join(self.root_dir, self.noise_dir)), 'Path to noise images cannot be found'
 
-        self.signal_files = sorted([os.path.join(self.root_dir, signal_dir, file) for file in
-                                    os.listdir(os.path.join(self.root_dir, self.signal_dir))
-                                    if file.endswith('.npz')])
-        self.noise_files = sorted([os.path.join(self.root_dir, noise_dir, file) for file in
-                                   os.listdir(os.path.join(self.root_dir, self.noise_dir))
-                                   if file.endswith('.npz')])
+        self.signal_files = []
+        self.noise_files = []
+
+        noise_df = pd.read_csv(os.path.join(self.root_dir, self.noise_dir, 'chunk1.csv'))
+        noise_list = noise_df['trace_name'].to_list()
+        noise_file = h5py.File(os.path.join(self.root_dir, self.noise_dir, noise_hdf), 'r')
+        for _, evi in enumerate(noise_list):
+            noise_dataset = noise_file.get('data/' + str(evi))
+            noise_dataset = np.array(noise_dataset)
+            self.noise_files.append(noise_dataset)
+
+        if self.type == 'train':
+            signal_df = pd.read_csv(os.path.join(self.root_dir, self.signal_dir, 'chunk2.csv'))
+            signal_list = signal_df['trace_name'].to_list()
+            signal_file = h5py.File(os.path.join(self.root_dir, self.signal_dir, signal_hdf), 'r')
+            for _, evi in enumerate(signal_list):
+                signal_dataset = signal_file.get('data/' + str(evi))
+                signal_dataset = np.array(signal_dataset)
+                self.signal_files.append(signal_dataset)
+
+        if self.type == 'test':
+            self.signal_files = sorted([os.path.join(self.root_dir, signal_dir, file) for file in
+                                        os.listdir(os.path.join(self.root_dir, self.signal_dir))
+                                        if file.endswith('.npz')])
+
+        self.signal_files = np.array(self.signal_files)
+        self.noise_files = np.array(self.noise_files)
 
     def __len__(self):
         if self.type == 'train':
@@ -42,23 +65,25 @@ class SeismicDatasetLoader(Dataset):
 
         item = np.mod(item, len(self.signal_files))
 
-        signal_dict = np.load(self.signal_files[item], allow_pickle=True)['data']
-        if len(signal_dict.shape) > 1:
-            signal = signal_dict[:, 0]
+        noise = self.noise_files[item]
+        noise = noise[:, 0]
+
+        if self.type == 'test':
+            signal_dict = np.load(self.signal_files[item], allow_pickle=True)['data']
+            if len(signal_dict.shape) > 1:
+                signal = signal_dict[:, 0]
+            else:
+                signal = signal_dict
+
         else:
-            signal = signal_dict
-
-        noise = np.load(self.noise_files[randint(0, len(self.noise_files) - 1)], allow_pickle=True)['arr_0']
-        while np.sum(noise) == 0:
-            noise = np.load(self.noise_files[randint(0, len(self.noise_files) - 1)], allow_pickle=True)['arr_0']
-
-        A_noise = random.randint(1, 4)
+            signal = self.signal_files[item]
+            signal = signal[:, 0]
         snr = random.randint(1, 12)
         if self.type == 'train':
-            signal, noise, noisy_signal_fft, signal_fft, noise_fft = prepare_dataset(signal, noise, A_noise, snr,
+            signal, noise, noisy_signal_fft, signal_fft, noise_fft = prepare_dataset(signal, noise, snr,
                                                                                      itp=3000)
         if self.type == 'test':
-            signal, noise, noisy_signal_fft, signal_fft, noise_fft = prepare_dataset(signal, noise, A_noise, snr, itp=0)
+            signal, noise, noisy_signal_fft, signal_fft, noise_fft = prepare_dataset(signal, noise, snr, itp=0)
 
         # Masks
         r = np.abs(noise_fft) / (np.abs(signal_fft) + 1e-5)

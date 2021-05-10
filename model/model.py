@@ -7,6 +7,7 @@ class Net(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(2, 8, kernel_size=3, padding=(1,1))
+        torch.nn.init.xavier_uniform_(self.conv1.weight)
         self.bn1 = nn.BatchNorm2d(num_features=8)
         self.conv2 = nn.Conv2d(8, 8, kernel_size=3, padding=(1,1))
         self.bn2 = nn.BatchNorm2d(num_features=8)

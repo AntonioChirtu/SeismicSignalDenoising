@@ -12,7 +12,7 @@ def get_snr(data, itp, dit=300):
         return 0
 
 
-def prepare_dataset(signal, noise, A_noise, snr, itp):
+def prepare_dataset(signal, noise, snr, itp):
     """ Function for adding noise over signal to provide data for training """
 
     T = 30  # secunde
