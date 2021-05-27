@@ -1,7 +1,5 @@
 import torch.nn.functional as F
-import torch.nn as nn
 import torch
-from torch.autograd import Function
 
 
 # see https://pytorch.org/docs/master/notes/extending.html
