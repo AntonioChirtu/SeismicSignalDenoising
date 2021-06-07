@@ -10,12 +10,10 @@ from scipy.signal import istft
 import pycwt
 from stockwell import ist
 from torch.utils.data import DataLoader
-from torchvision import transforms
 
 from data_loader.data_loaders import SeismicDatasetLoader
 from model.loss import softCrossEntropy
 from model.model import Net
-from utils.util import UnNormalize
 
 TRAIN_DIR = 'chunk2'
 PRED_DIR = 'chunk2'
@@ -109,9 +107,8 @@ def main():
             signal_transform = signal_transform.cpu().detach().numpy()
             noisy_signal = noisy_signal.cpu().detach().numpy()
             noisy_signal_transform = noisy_signal_transform.cpu().detach().numpy()
-            signal_max = signal_max.cpu().detach().numpy()
-            signal_min = signal_min.cpu().detach().numpy()
             scales = scales.cpu().detach().numpy()
+            snr = snr.cpu().detach().numpy()
 
             SNR_before_denoising.append(snr.cpu().detach().numpy())
 
