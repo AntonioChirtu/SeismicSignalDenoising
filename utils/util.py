@@ -33,9 +33,6 @@ def prepare_dataset(signal, noise, snr, itp, transform_type):
 
     np.nan_to_num(signal, nan=-50, posinf=50, neginf=-50)
 
-    signal_min = np.amin(signal)
-    signal_max = np.amax(signal)
-
     signal = 10 * (2 * (signal - np.amin(signal)) / (np.amax(signal) - np.amin(signal)) - 1)
 
     np.nan_to_num(noise, nan=-4, posinf=4, neginf=-4)
@@ -72,24 +69,4 @@ def prepare_dataset(signal, noise, snr, itp, transform_type):
 
     noise_transform = noisy_signal_transform - signal_transform
 
-    return signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, \
-           signal_max, scales
-
-
-class UnNormalize(object):
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def __call__(self, tensor):
-        """
-        Args:
-            tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
-        Returns:
-            Tensor: Normalized image.
-        """
-        for t, m, s in zip(tensor, self.mean, self.std):
-            t.mul_(s).add_(m)
-            # The normalize code -> t.sub_(m).div_(s)
-        return tensor
-
+    return signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, scales

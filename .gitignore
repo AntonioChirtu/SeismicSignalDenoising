@@ -11,3 +11,5 @@
 /utils/ssq_test.py
 /utils/miniSEED_test.py
 /utils/stockwell_test.py
+/loss.npy
+/denoising_net.pth

@@ -84,10 +84,10 @@ class SeismicDatasetLoader(Dataset):
 
         snr = random.randint(1, 12)
         if self.type == 'train':
-            signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, signal_max, scales = \
+            signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, scales = \
                 prepare_dataset(signal, noise, snr, itp=0, transform_type=transform_type)
         if self.type == 'test':
-            signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, signal_max, scales = \
+            signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, scales = \
                 prepare_dataset(signal, noise, snr, itp=0, transform_type=transform_type)
 
         # if transform_type[0] == 'S':
@@ -133,4 +133,4 @@ class SeismicDatasetLoader(Dataset):
 
         return torch.from_numpy(signal), inputs, torch.from_numpy(noisy_signal_transform), torch.from_numpy(
             np.array(snr)), \
-               torch.from_numpy(targets), transform_type, signal_transform, noisy_signal, signal_min, signal_max, scales
+               torch.from_numpy(targets), transform_type, signal_transform, noisy_signal, scales

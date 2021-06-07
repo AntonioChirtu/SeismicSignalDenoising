@@ -33,13 +33,6 @@ dj = 1/12
 dt = Ts
 mother = pycwt.Morlet(6)
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize([0.5], [0.5])
-])
-
-unorm = UnNormalize([0.5], [0.5])
-
 
 def init_weights(m):
     if type(m) == nn.Conv2d:
@@ -50,11 +43,11 @@ def init_weights(m):
 def main():
     if not os.path.exists(save_path):
         train_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=TRAIN_DIR, noise_dir=NOISE_DIR,
-                                             type='train', transform=transform)
+                                             type='train', transform=None)
         train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
 
     test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR,
-                                        type='test', transform=transform)
+                                        type='test', transform=None)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -110,7 +103,7 @@ def main():
 
     with torch.no_grad():
         for data in test_loader:
-            signal, inputs, noisy_signal_transform, snr, _, transform_type, signal_transform, noisy_signal, signal_min, signal_max, scales = data
+            signal, inputs, noisy_signal_transform, snr, _, transform_type, signal_transform, noisy_signal, scales = data
 
             signal = signal.cpu().detach().numpy()
             signal_transform = signal_transform.cpu().detach().numpy()
@@ -149,7 +142,6 @@ def main():
                 denoised_signal = (dj * np.sqrt(dt) / (mother.cdelta * mother.psi(0)) * (np.real(denoised_transform) / np.sqrt(sj)).sum(axis=0))
 
             denoised_signal = 10 * (2 * (denoised_signal - np.amin(denoised_signal)) / (np.amax(denoised_signal) - np.amin(denoised_signal)) - 1)
-            # denoised_signal = (denoised_signal / 10 + 1) * 0.5 * (signal_max - signal_min) + signal_min
 
             plt.figure()
             plt.plot(denoised_signal.flatten())
