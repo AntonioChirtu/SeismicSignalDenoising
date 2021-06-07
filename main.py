@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from matplotlib import pyplot as plt
 from scipy.signal import istft
-from ssqueezepy import issq_cwt
+import pycwt
 from stockwell import ist
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -26,12 +26,12 @@ save_path = 'denoising_net.pth'
 T = 30  # secunde
 Fs = 100  # frecventa esantionare
 Ts = 1 / Fs
-nt = int(T / Ts)  #
+nt = int(T / Ts)
 nperseg = 30
 nfft = 60
-
-train_size = 0.8
-test_size = 0.2
+dj = 1/12
+dt = Ts
+mother = pycwt.Morlet(6)
 
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -51,19 +51,17 @@ def main():
     if not os.path.exists(save_path):
         train_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=TRAIN_DIR, noise_dir=NOISE_DIR,
                                              type='train', transform=transform)
-        train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=8)
+        train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
 
     test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR,
                                         type='test', transform=transform)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=8)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     net = Net().double()
     net.apply(init_weights)
     net.to(device)
-    # criterion = nn.CrossEntropyLoss()
-    # criterion = softCrossEntropy()
 
     optimizer = optim.SGD(net.parameters(), lr=1e-4, momentum=0.9)
 
@@ -78,7 +76,7 @@ def main():
             running_loss = 0.0
             for i, data in enumerate(train_loader, 0):
                 with torch.enable_grad():
-                    _, inputs, _, _, targets, _, *_ = data
+                    _, inputs, _, _, targets, *_ = data
 
                     inputs = inputs.permute(0, 3, 1, 2).to(device)
                     targets = targets.permute(0, 3, 1, 2).to(device)
@@ -112,7 +110,7 @@ def main():
 
     with torch.no_grad():
         for data in test_loader:
-            signal, inputs, noisy_signal_transform, snr, _, transform_type, signal_transform, noisy_signal, signal_min, signal_max = data
+            signal, inputs, noisy_signal_transform, snr, _, transform_type, signal_transform, noisy_signal, signal_min, signal_max, scales = data
 
             signal = signal.cpu().detach().numpy()
             signal_transform = signal_transform.cpu().detach().numpy()
@@ -120,13 +118,13 @@ def main():
             noisy_signal_transform = noisy_signal_transform.cpu().detach().numpy()
             signal_max = signal_max.cpu().detach().numpy()
             signal_min = signal_min.cpu().detach().numpy()
+            scales = scales.cpu().detach().numpy()
 
             SNR_before_denoising.append(snr.cpu().detach().numpy())
 
             inputs = inputs.permute(0, 3, 1, 2).to(device)
             outputs = net(inputs)
 
-            # outputs = unorm(outputs)
             outputs = outputs.cpu().detach().numpy()
 
             if transform_type[0] == 'STFT':
@@ -136,21 +134,35 @@ def main():
                 outputs = cv2.resize(outputs[0, 0, :, :], (3000, 1501), interpolation=cv2.INTER_CUBIC)
                 denoised_transform = noisy_signal_transform[0, :, :] * outputs
                 denoised_signal = ist(denoised_transform)
+            elif transform_type[0] == 'CWT':
+                outputs = cv2.resize(outputs[0, 0, :, :], (3000, 128), interpolation=cv2.INTER_CUBIC)
+                denoised_transform = noisy_signal_transform[0, :, :] * outputs
+                sj = scales
+                a, b = noisy_signal_transform[0, :, :].shape
+                c = sj.size
+                if a == c:
+                    sj = (np.ones([b, 1]) * sj).transpose()
+                elif b == c:
+                    sj = np.ones([a, 1]) * sj
+                else:
+                    raise Warning('Input array dimensions do not match.')
+                denoised_signal = (dj * np.sqrt(dt) / (mother.cdelta * mother.psi(0)) * (np.real(denoised_transform) / np.sqrt(sj)).sum(axis=0))
 
+            denoised_signal = 10 * (2 * (denoised_signal - np.amin(denoised_signal)) / (np.amax(denoised_signal) - np.amin(denoised_signal)) - 1)
             # denoised_signal = (denoised_signal / 10 + 1) * 0.5 * (signal_max - signal_min) + signal_min
 
-            # plt.figure()
-            # plt.plot(denoised_signal.flatten())
-            # plt.title('Output Signal')
+            plt.figure()
+            plt.plot(denoised_signal.flatten())
+            plt.title('Output Signal')
             # plt.figure()
             # plt.imshow(denoised_transform[0, :, :].real)
             # plt.title('Output Signal Transform Magnitude')
             # plt.figure()
             # plt.imshow(denoised_transform[0, :, :].imag)
             # plt.title('Output Signal Transform Phase')
-            # plt.figure()
-            # plt.plot(signal.flatten())
-            # plt.title('Original Signal')
+            plt.figure()
+            plt.plot(signal.flatten())
+            plt.title('Original Signal')
             # plt.figure()
             # plt.imshow(signal_transform[0, :, :].real)
             # plt.title('Original Signal Transform Magnitude')
@@ -166,7 +178,7 @@ def main():
             # plt.figure()
             # plt.imshow(noisy_signal_transform[0, :, :].imag)
             # plt.title('Noisy Signal Transform Phase')
-            # plt.show()
+            plt.show()
             while cnt < 3:
                 np.save(npy_path + '/npy_files/' + transform_type[0] + '/signal_' + str(cnt) + '.npy', signal)
                 np.save(npy_path + '/npy_files/' + transform_type[0] + '/signal_transform_' + str(cnt) + '.npy',

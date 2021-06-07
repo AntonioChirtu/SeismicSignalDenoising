@@ -6,3 +6,8 @@
 /data/chunk2/
 /SeismicSignalDenoising
 /pyvenv.cfg
+/npy_files/
+/utils/cwt_test.py
+/utils/ssq_test.py
+/utils/miniSEED_test.py
+/utils/stockwell_test.py

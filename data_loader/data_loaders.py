@@ -11,7 +11,7 @@ import cv2
 
 signal_hdf = "chunk2.hdf5"
 noise_hdf = "chunk1.hdf5"
-transform_type = 'STFT'  # STFT - Short Time Fourier Transform; S - Stockwell transform;
+transform_type = 'CWT'  # STFT - Short Time Fourier Transform;S - Stockwell transform;CWT - Continuous Wavelet Transform
 
 
 class SeismicDatasetLoader(Dataset):
@@ -84,17 +84,31 @@ class SeismicDatasetLoader(Dataset):
 
         snr = random.randint(1, 12)
         if self.type == 'train':
-            signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, signal_max = prepare_dataset(signal, noise,
-                                                                                                       snr,
-                                                                                                       itp=0,
-                                                                                                       transform_type=transform_type)
+            signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, signal_max, scales = \
+                prepare_dataset(signal, noise, snr, itp=0, transform_type=transform_type)
         if self.type == 'test':
-            signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, signal_max = prepare_dataset(signal, noise,
-                                                                                                       snr,
-                                                                                                       itp=0,
-                                                                                                       transform_type=transform_type)
+            signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, signal_max, scales = \
+                prepare_dataset(signal, noise, snr, itp=0, transform_type=transform_type)
 
-        if transform_type[0] == 'S':
+        # if transform_type[0] == 'S':
+        #     noise_resized_re = cv2.resize(noise_transform.real, (201, 31), interpolation=cv2.INTER_CUBIC)
+        #     noise_resized_im = cv2.resize(noise_transform.imag, (201, 31), interpolation=cv2.INTER_CUBIC)
+        #     noise_resized = noise_resized_re + 1j * noise_resized_im
+        #
+        #     signal_resized_re = cv2.resize(signal_transform.real, (201, 31), interpolation=cv2.INTER_CUBIC)
+        #     signal_resized_im = cv2.resize(signal_transform.imag, (201, 31), interpolation=cv2.INTER_CUBIC)
+        #     signal_resized = signal_resized_re + 1j * signal_resized_im
+        #
+        #     transform_resized_re = cv2.resize(noisy_signal_transform.real, (201, 31), interpolation=cv2.INTER_CUBIC)
+        #     transform_resized_im = cv2.resize(noisy_signal_transform.imag, (201, 31), interpolation=cv2.INTER_CUBIC)
+        #     transform_resized = transform_resized_re + 1j * transform_resized_im
+
+        if transform_type[0] == 'STFT':
+            noise_resized = noise
+            signal_resized = signal
+            transform_resized = noisy_signal_transform
+
+        else:
             noise_resized_re = cv2.resize(noise_transform.real, (201, 31), interpolation=cv2.INTER_CUBIC)
             noise_resized_im = cv2.resize(noise_transform.imag, (201, 31), interpolation=cv2.INTER_CUBIC)
             noise_resized = noise_resized_re + 1j * noise_resized_im
@@ -107,11 +121,6 @@ class SeismicDatasetLoader(Dataset):
             transform_resized_im = cv2.resize(noisy_signal_transform.imag, (201, 31), interpolation=cv2.INTER_CUBIC)
             transform_resized = transform_resized_re + 1j * transform_resized_im
 
-        if transform_type[0] == 'STFT':
-            noise_resized = noise
-            signal_resized = signal
-            transform_resized = noisy_signal_transform
-
         # Masks
         r = np.abs(noise_resized) / (np.abs(signal_resized) + 1e-5)  # signal_transform, noise_transform
         targets = np.zeros(shape=(r.shape[0], r.shape[1], 2))
@@ -122,6 +131,6 @@ class SeismicDatasetLoader(Dataset):
         inputs[:, :, 0] = self.transform(transform_resized.real)
         inputs[:, :, 1] = self.transform(transform_resized.imag)
 
-        return torch.from_numpy(signal), inputs, torch.from_numpy(transform_resized), torch.from_numpy(
+        return torch.from_numpy(signal), inputs, torch.from_numpy(noisy_signal_transform), torch.from_numpy(
             np.array(snr)), \
-               torch.from_numpy(targets), transform_type, signal_transform, noisy_signal, signal_min, signal_max
+               torch.from_numpy(targets), transform_type, signal_transform, noisy_signal, signal_min, signal_max, scales

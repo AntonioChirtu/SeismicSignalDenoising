@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import signal as scipy_signal
 from stockwell import st
-from matplotlib import pyplot as plt
+import pycwt
 
 
 def get_snr(data, itp, dit=300):
@@ -23,6 +23,7 @@ def prepare_dataset(signal, noise, snr, itp, transform_type):
     nperseg = 30
     nfft = 60
     nt = int(T / Ts)  # numar esantioane = 30 / (1/100) = 3000 esantioane
+    scales = 0
 
     if len(signal) == nt:
         signal = signal
@@ -62,9 +63,17 @@ def prepare_dataset(signal, noise, snr, itp, transform_type):
         signal_transform = st(signal)
         noisy_signal_transform = st(noisy_signal)
 
+    else:
+        mother = pycwt.Morlet(6)
+        signal_transform, scales, freqs, coi, fft, fftfreqs = pycwt.cwt(signal, dt=Ts, dj=1 / 12, s0=2 * Ts,
+                                                                        wavelet=mother)
+        noisy_signal_transform, scales, freqs, coi, fft, fftfreqs = pycwt.cwt(noisy_signal, dt=Ts, dj=1 / 12, s0=2 * Ts,
+                                                                        wavelet=mother)
+
     noise_transform = noisy_signal_transform - signal_transform
 
-    return signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, signal_max
+    return signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, \
+           signal_max, scales
 
 
 class UnNormalize(object):
