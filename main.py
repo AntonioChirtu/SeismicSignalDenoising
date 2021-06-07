@@ -16,7 +16,6 @@ from data_loader.data_loaders import SeismicDatasetLoader
 from model.loss import softCrossEntropy
 from model.model import Net
 from utils.util import UnNormalize
-import pycwt
 
 TRAIN_DIR = 'chunk2'
 PRED_DIR = 'chunk2'
@@ -79,7 +78,7 @@ def main():
             running_loss = 0.0
             for i, data in enumerate(train_loader, 0):
                 with torch.enable_grad():
-                    _, inputs, _, _, targets, _ = data
+                    _, inputs, _, _, targets, _, *_ = data
 
                     inputs = inputs.permute(0, 3, 1, 2).to(device)
                     targets = targets.permute(0, 3, 1, 2).to(device)
@@ -104,36 +103,41 @@ def main():
         torch.save(net.state_dict(), save_path)
 
     npy_path = r'/home/antonio/SeismicSignalDenoising'
-    np.save(npy_path + '/npy_files/loss.npy', loss_per_epoch)
+    np.save(npy_path + '/loss.npy', loss_per_epoch)
 
     model = Net()
     model.load_state_dict(torch.load(save_path))
     model.eval()
+    cnt = 0
 
     with torch.no_grad():
         for data in test_loader:
-            signal, inputs, noisy_signal_transform, snr, _, transform_type, signal_transform, noisy_signal = data
+            signal, inputs, noisy_signal_transform, snr, _, transform_type, signal_transform, noisy_signal, signal_min, signal_max = data
 
             signal = signal.cpu().detach().numpy()
             signal_transform = signal_transform.cpu().detach().numpy()
             noisy_signal = noisy_signal.cpu().detach().numpy()
             noisy_signal_transform = noisy_signal_transform.cpu().detach().numpy()
+            signal_max = signal_max.cpu().detach().numpy()
+            signal_min = signal_min.cpu().detach().numpy()
 
             SNR_before_denoising.append(snr.cpu().detach().numpy())
 
             inputs = inputs.permute(0, 3, 1, 2).to(device)
             outputs = net(inputs)
 
-            outputs = unorm(outputs)
+            # outputs = unorm(outputs)
             outputs = outputs.cpu().detach().numpy()
 
-            if transform_type == 'STFT':
-                denoised_transform = noisy_signal_transform * outputs[:, 0, :, :]
+            if transform_type[0] == 'STFT':
+                denoised_transform = noisy_signal_transform[0, :, :] * outputs[0, 0, :, :]
                 _, denoised_signal = istft(denoised_transform, fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
-            elif transform_type == 'S':
+            elif transform_type[0] == 'S':
                 outputs = cv2.resize(outputs[0, 0, :, :], (3000, 1501), interpolation=cv2.INTER_CUBIC)
                 denoised_transform = noisy_signal_transform[0, :, :] * outputs
                 denoised_signal = ist(denoised_transform)
+
+            # denoised_signal = (denoised_signal / 10 + 1) * 0.5 * (signal_max - signal_min) + signal_min
 
             # plt.figure()
             # plt.plot(denoised_signal.flatten())
@@ -163,13 +167,19 @@ def main():
             # plt.imshow(noisy_signal_transform[0, :, :].imag)
             # plt.title('Noisy Signal Transform Phase')
             # plt.show()
-
-            np.save(npy_path + '/npy_files/' + transform_type + '/signal.npy', signal)
-            np.save(npy_path + '/npy_files/' + transform_type + '/signal_transform.npy', signal_transform)
-            np.save(npy_path + '/npy_files/' + transform_type + '/noisy_signal.npy', noisy_signal)
-            np.save(npy_path + '/npy_files/' + transform_type + '/noisy_signal_transform.npy', noisy_signal_transform)
-            np.save(npy_path + '/npy_files/' + transform_type + '/denoised_signal.npy', denoised_signal)
-            np.save(npy_path + '/npy_files/' + transform_type + '/denoised_transform.npy', denoised_transform)
+            while cnt < 3:
+                np.save(npy_path + '/npy_files/' + transform_type[0] + '/signal_' + str(cnt) + '.npy', signal)
+                np.save(npy_path + '/npy_files/' + transform_type[0] + '/signal_transform_' + str(cnt) + '.npy',
+                        signal_transform)
+                np.save(npy_path + '/npy_files/' + transform_type[0] + '/noisy_signal_' + str(cnt) + '.npy',
+                        noisy_signal)
+                np.save(npy_path + '/npy_files/' + transform_type[0] + '/noisy_signal_transform_' + str(cnt) + '.npy',
+                        noisy_signal_transform)
+                np.save(npy_path + '/npy_files/' + transform_type[0] + '/denoised_signal_' + str(cnt) + '.npy',
+                        denoised_signal)
+                np.save(npy_path + '/npy_files/' + transform_type[0] + '/denoised_transform_' + str(cnt) + '.npy',
+                        denoised_transform)
+                cnt += 1
 
             snr_calculat = 20 * np.log10(np.std(signal) / np.std(denoised_signal - signal))
             SNR_after_denoising.append(snr_calculat)
@@ -180,8 +190,8 @@ def main():
     plt.ylabel("SNR after denoising")
     plt.show()
 
-    np.save(npy_path + '/npy_files/SNR_after.npy', SNR_after_denoising)
-    np.save(npy_path + '/npy_files/SNR_before.npy', SNR_before_denoising)
+    np.save(npy_path + '/SNR_after.npy', SNR_after_denoising)
+    np.save(npy_path + '/SNR_before.npy', SNR_before_denoising)
 
 
 if __name__ == '__main__':

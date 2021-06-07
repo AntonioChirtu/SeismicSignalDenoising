@@ -32,6 +32,9 @@ def prepare_dataset(signal, noise, snr, itp, transform_type):
 
     np.nan_to_num(signal, nan=-50, posinf=50, neginf=-50)
 
+    signal_min = np.amin(signal)
+    signal_max = np.amax(signal)
+
     signal = 10 * (2 * (signal - np.amin(signal)) / (np.amax(signal) - np.amin(signal)) - 1)
 
     np.nan_to_num(noise, nan=-4, posinf=4, neginf=-4)
@@ -49,19 +52,19 @@ def prepare_dataset(signal, noise, snr, itp, transform_type):
     # 3000 esantioane pentru a avea 201 ferestre temporale suprapuse in care se calculeaza STFT
     # numar_ferestre_temporale ~ (size_x - nperseg)/(nperseg-overlap), overlap = nperseg // 2
     # STFT -- partea reala; partea imaginara
-    if transform_type == 'STFT':
+    if transform_type[0] == 'STFT':
         f, t, signal_transform = scipy_signal.stft(signal, fs=Fs, nperseg=nperseg, nfft=nfft,
                                                    boundary='zeros')  # signal_shape = [31, 201]
         f, t, noisy_signal_transform = scipy_signal.stft(noisy_signal, fs=Fs, nperseg=nperseg, nfft=nfft,
                                                          boundary='zeros')  # noise_shape = signal_shape
 
-    elif transform_type == 'S':
+    elif transform_type[0] == 'S':
         signal_transform = st(signal)
         noisy_signal_transform = st(noisy_signal)
 
     noise_transform = noisy_signal_transform - signal_transform
 
-    return signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal
+    return signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, signal_min, signal_max
 
 
 class UnNormalize(object):
