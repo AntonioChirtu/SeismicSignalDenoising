@@ -11,7 +11,7 @@ import cv2
 
 signal_hdf = "chunk2.hdf5"
 noise_hdf = "chunk1.hdf5"
-transform_type = 'CWT'  # STFT - Short Time Fourier Transform;S - Stockwell transform;CWT - Continuous Wavelet Transform
+transform_type = 'STFT'  # STFT - Short Time Fourier Transform;S - Stockwell transform;CWT - Continuous Wavelet Transform
 
 
 class SeismicDatasetLoader(Dataset):
@@ -89,12 +89,10 @@ class SeismicDatasetLoader(Dataset):
         if self.type == 'test':
             signal, noise, noisy_signal_transform, signal_transform, noise_transform, noisy_signal, scales = \
                 prepare_dataset(signal, noise, snr, itp=0, transform_type=transform_type)
-
-        if transform_type[0] == 'STFT':
-            noise_resized = noise
-            signal_resized = signal
+        if transform_type == 'STFT':
+            noise_resized = noise_transform
+            signal_resized = signal_transform
             transform_resized = noisy_signal_transform
-
         else:
             noise_resized_re = cv2.resize(noise_transform.real, (201, 31), interpolation=cv2.INTER_CUBIC)
             noise_resized_im = cv2.resize(noise_transform.imag, (201, 31), interpolation=cv2.INTER_CUBIC)

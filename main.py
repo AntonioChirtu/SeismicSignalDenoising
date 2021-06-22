@@ -10,10 +10,13 @@ from scipy.signal import istft
 import pycwt
 from stockwell import ist
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 from data_loader.data_loaders import SeismicDatasetLoader
 from model.loss import softCrossEntropy
-from model.model import Net
+from model.model import Net, UNet
+from utils.util import UnNormalize
+from torchsummary import summary
 
 TRAIN_DIR = 'chunk2'
 PRED_DIR = 'chunk2'
@@ -31,6 +34,13 @@ dj = 1/12
 dt = Ts
 mother = pycwt.Morlet(6)
 
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize([0.5], [0.5])
+])
+
+unorm = UnNormalize([0.5], [0.5])
+
 
 def init_weights(m):
     if type(m) == nn.Conv2d:
@@ -41,18 +51,20 @@ def init_weights(m):
 def main():
     if not os.path.exists(save_path):
         train_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=TRAIN_DIR, noise_dir=NOISE_DIR,
-                                             type='train', transform=None)
-        train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
+                                             type='train', transform=transform)
+        train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=8)
 
     test_dataset = SeismicDatasetLoader(root_dir=path, signal_dir=PRED_DIR, noise_dir=NOISE_DIR,
-                                        type='test', transform=None)
+                                        type='test', transform=transform)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    net = Net().double()
-    net.apply(init_weights)
+    net = UNet(n_channels=2, n_classes=1, bilinear=True).double()
+    # net = Net().double()
+    # net.apply(init_weights)
     net.to(device)
+    print(net)
 
     optimizer = optim.SGD(net.parameters(), lr=1e-4, momentum=0.9)
 
@@ -62,7 +74,7 @@ def main():
 
     if not os.path.exists(save_path):
         net.train()
-        for epoch in range(50):
+        for epoch in range(10):
             print('TRAIN epoch #', epoch)
             running_loss = 0.0
             for i, data in enumerate(train_loader, 0):
@@ -94,7 +106,8 @@ def main():
     npy_path = r'/home/antonio/SeismicSignalDenoising'
     np.save(npy_path + '/loss.npy', loss_per_epoch)
 
-    model = Net()
+    # model = Net()
+    model = UNet(n_channels=2, n_classes=1, bilinear=True)
     model.load_state_dict(torch.load(save_path))
     model.eval()
     cnt = 0
@@ -108,7 +121,6 @@ def main():
             noisy_signal = noisy_signal.cpu().detach().numpy()
             noisy_signal_transform = noisy_signal_transform.cpu().detach().numpy()
             scales = scales.cpu().detach().numpy()
-            snr = snr.cpu().detach().numpy()
 
             SNR_before_denoising.append(snr.cpu().detach().numpy())
 
@@ -116,7 +128,6 @@ def main():
             outputs = net(inputs)
 
             outputs = outputs.cpu().detach().numpy()
-
             if transform_type[0] == 'STFT':
                 denoised_transform = noisy_signal_transform[0, :, :] * outputs[0, 0, :, :]
                 _, denoised_signal = istft(denoised_transform, fs=Fs, nperseg=nperseg, nfft=nfft, boundary='zeros')
@@ -140,34 +151,37 @@ def main():
 
             denoised_signal = 10 * (2 * (denoised_signal - np.amin(denoised_signal)) / (np.amax(denoised_signal) - np.amin(denoised_signal)) - 1)
 
+            # plt.figure()
+            # plt.plot(denoised_signal.flatten())
+            # plt.title('Output Signal')
             plt.figure()
-            plt.plot(denoised_signal.flatten())
-            plt.title('Output Signal')
+            plt.imshow(denoised_transform.real)
+            plt.title('Output Signal Transform Real')
             # plt.figure()
-            # plt.imshow(denoised_transform[0, :, :].real)
-            # plt.title('Output Signal Transform Magnitude')
+            # plt.imshow(denoised_transform.imag)
+            # plt.title('Output Signal Transform Imag')
             # plt.figure()
-            # plt.imshow(denoised_transform[0, :, :].imag)
-            # plt.title('Output Signal Transform Phase')
+            # plt.plot(signal.flatten())
+            # plt.title('Original Signal')
             plt.figure()
-            plt.plot(signal.flatten())
-            plt.title('Original Signal')
-            # plt.figure()
-            # plt.imshow(signal_transform[0, :, :].real)
-            # plt.title('Original Signal Transform Magnitude')
+            plt.imshow(signal_transform[0, :, :].real)
+            plt.title('Original Signal Transform Real')
             # plt.figure()
             # plt.imshow(signal_transform[0, :, :].imag)
-            # plt.title('Original Signal Transform Phase')
+            # plt.title('Original Signal Transform Imag')
             # plt.figure()
             # plt.plot(noisy_signal.flatten())
             # plt.title('Noisy Signal')
-            # plt.figure()
-            # plt.imshow(noisy_signal_transform[0, :, :].real)
-            # plt.title('Noisy Signal Transform Magnitude')
+            plt.figure()
+            plt.imshow(noisy_signal_transform[0, :, :].real)
+            plt.title('Noisy Signal Transform Real')
             # plt.figure()
             # plt.imshow(noisy_signal_transform[0, :, :].imag)
-            # plt.title('Noisy Signal Transform Phase')
+            # plt.title('Noisy Signal Transform Imag')
             plt.show()
+            # print((signal_transform[0, :, :].real - denoised_transform.real).sum())
+            # print((signal_transform[0, :, :].imag - denoised_transform.imag).sum())
+            # print((noisy_signal_transform[0, :, :].real - denoised_transform.real).sum())
             while cnt < 3:
                 np.save(npy_path + '/npy_files/' + transform_type[0] + '/signal_' + str(cnt) + '.npy', signal)
                 np.save(npy_path + '/npy_files/' + transform_type[0] + '/signal_transform_' + str(cnt) + '.npy',
