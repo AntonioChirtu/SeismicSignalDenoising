@@ -16,7 +16,7 @@ from data_loader.data_loaders import SeismicDatasetLoader
 from model.loss import softCrossEntropy
 from model.model import Net, UNet
 from utils.util import UnNormalize
-from torchsummary import summary
+from tqdm import tqdm
 
 TRAIN_DIR = 'chunk2'
 PRED_DIR = 'chunk2'
@@ -39,7 +39,7 @@ transform = transforms.Compose([
     transforms.Normalize([0.5], [0.5])
 ])
 
-unorm = UnNormalize([0.5], [0.5])
+# unorm = UnNormalize([0.5], [0.5])
 
 
 def init_weights(m):
@@ -66,7 +66,8 @@ def main():
     net.to(device)
     print(net)
 
-    optimizer = optim.SGD(net.parameters(), lr=1e-4, momentum=0.9)
+    # optimizer = optim.SGD(net.parameters(), lr=1e-4, momentum=0.9)
+    optimizer = optim.Adam(net.parameters(), lr=1e-4)
 
     SNR_before_denoising = []
     SNR_after_denoising = []
@@ -77,7 +78,7 @@ def main():
         for epoch in range(10):
             print('TRAIN epoch #', epoch)
             running_loss = 0.0
-            for i, data in enumerate(train_loader, 0):
+            for i, data in tqdm(enumerate(train_loader, 0)):
                 with torch.enable_grad():
                     _, inputs, _, _, targets, *_ = data
 
@@ -113,7 +114,7 @@ def main():
     cnt = 0
 
     with torch.no_grad():
-        for data in test_loader:
+        for data in tqdm(test_loader):
             signal, inputs, noisy_signal_transform, snr, _, transform_type, signal_transform, noisy_signal, scales = data
 
             signal = signal.cpu().detach().numpy()
@@ -154,31 +155,31 @@ def main():
             # plt.figure()
             # plt.plot(denoised_signal.flatten())
             # plt.title('Output Signal')
-            plt.figure()
-            plt.imshow(denoised_transform.real)
-            plt.title('Output Signal Transform Real')
+            # plt.figure()
+            # plt.imshow(denoised_transform.real)
+            # plt.title('Output Signal Transform Real')
             # plt.figure()
             # plt.imshow(denoised_transform.imag)
             # plt.title('Output Signal Transform Imag')
             # plt.figure()
             # plt.plot(signal.flatten())
             # plt.title('Original Signal')
-            plt.figure()
-            plt.imshow(signal_transform[0, :, :].real)
-            plt.title('Original Signal Transform Real')
+            # plt.figure()
+            # plt.imshow(signal_transform[0, :, :].real)
+            # plt.title('Original Signal Transform Real')
             # plt.figure()
             # plt.imshow(signal_transform[0, :, :].imag)
             # plt.title('Original Signal Transform Imag')
             # plt.figure()
             # plt.plot(noisy_signal.flatten())
             # plt.title('Noisy Signal')
-            plt.figure()
-            plt.imshow(noisy_signal_transform[0, :, :].real)
-            plt.title('Noisy Signal Transform Real')
+            # plt.figure()
+            # plt.imshow(noisy_signal_transform[0, :, :].real)
+            # plt.title('Noisy Signal Transform Real')
             # plt.figure()
             # plt.imshow(noisy_signal_transform[0, :, :].imag)
             # plt.title('Noisy Signal Transform Imag')
-            plt.show()
+            # plt.show()
             # print((signal_transform[0, :, :].real - denoised_transform.real).sum())
             # print((signal_transform[0, :, :].imag - denoised_transform.imag).sum())
             # print((noisy_signal_transform[0, :, :].real - denoised_transform.real).sum())

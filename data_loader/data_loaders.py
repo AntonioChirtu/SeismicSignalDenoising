@@ -11,7 +11,7 @@ import cv2
 
 signal_hdf = "chunk2.hdf5"
 noise_hdf = "chunk1.hdf5"
-transform_type = 'STFT'  # STFT - Short Time Fourier Transform;S - Stockwell transform;CWT - Continuous Wavelet Transform
+transform_type = 'S'  # STFT - Short Time Fourier Transform;S - Stockwell transform;CWT - Continuous Wavelet Transform
 
 
 class SeismicDatasetLoader(Dataset):
@@ -47,7 +47,7 @@ class SeismicDatasetLoader(Dataset):
                 self.signal_files_train.append(signal_dataset_train)
 
         if self.type == 'test':
-            for _, evi in enumerate(signal_list[160000:]):
+            for _, evi in enumerate(signal_list[190000:]):
                 signal_dataset_test = signal_file.get('data/' + str(evi))
                 signal_dataset_test = np.array(signal_dataset_test)
                 self.signal_files_test.append(signal_dataset_test)
